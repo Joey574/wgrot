@@ -27,7 +27,7 @@ func (s *State) Load(pool *pool.Pool) {
 
 	_ = json.Unmarshal(data, s)
 
-	if s.LastGood < 0 || s.LastGood >= len(pool.Peers) {
+	if s.LastGood < 0 || s.LastGood >= pool.Count() {
 		s.LastGood = 0
 	}
 }
@@ -45,10 +45,10 @@ func (s *State) Save() {
 }
 
 func (s *State) Next(pool *pool.Pool) *peer.Peer {
-	if s.LastGood < 0 || s.LastGood >= len(pool.Peers) {
+	if s.LastGood < 0 || s.LastGood >= pool.Count() {
 		s.LastGood = 0
 	}
 
-	s.LastGood = (s.LastGood + 1) % len(pool.Peers)
-	return &pool.Peers[s.LastGood]
+	s.LastGood = (s.LastGood + 1) % pool.Count()
+	return pool.At(s.LastGood)
 }

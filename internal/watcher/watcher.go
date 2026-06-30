@@ -40,7 +40,8 @@ func watch(watcher *fsnotify.Watcher, pool *pool.Pool, sigCh chan os.Signal) {
 			return
 		case event, ok := <-watcher.Events:
 			if !ok {
-				continue
+				fmt.Println("channel closed, exiting...")
+				return
 			}
 
 			if event.Has(fsnotify.Create) {
@@ -51,7 +52,8 @@ func watch(watcher *fsnotify.Watcher, pool *pool.Pool, sigCh chan os.Signal) {
 			}
 		case err, ok := <-watcher.Errors:
 			if !ok {
-				continue
+				fmt.Println("channel closed, exiting...")
+				return
 			}
 			fmt.Printf("watcher error: %v\n", err)
 		}

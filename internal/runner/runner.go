@@ -14,6 +14,8 @@ import (
 	"wgrot/v2/internal/state"
 )
 
+const rekeyWindow = int64(3 * 60)
+
 func Start(state *state.State, pool *pool.Pool, iface string, interval, timeout time.Duration) {
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP)
@@ -61,6 +63,8 @@ func doRotate(state *state.State, pool *pool.Pool, iface string, timeout time.Du
 }
 
 func rotateTo(peer *peer.Peer, iface string, timeout time.Duration) error {
+	start := time.Now().Unix()
+
 	keyFile, err := os.CreateTemp("", "wg-key-*")
 	if err != nil {
 		return fmt.Errorf("creating tmp key file: %w", err)
@@ -101,12 +105,11 @@ func rotateTo(peer *peer.Peer, iface string, timeout time.Duration) error {
 		return fmt.Errorf("ip route replace: %w", err)
 	}
 
-	return waitForHandshake(iface, peer.PublicKey, timeout)
+	return waitForHandshake(iface, peer.PublicKey, start, timeout)
 }
 
-func waitForHandshake(iface, pubKey string, timeout time.Duration) error {
+func waitForHandshake(iface, pubKey string, start int64, timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
-	start := time.Now().Unix()
 
 	for time.Now().Before(deadline) {
 		out, err := exec.Command("wg", "show", iface, "latest-handshakes").Output()
@@ -118,7 +121,7 @@ func waitForHandshake(iface, pubKey string, timeout time.Duration) error {
 				if len(fields) == 2 && fields[0] == pubKey {
 					ts, _ := strconv.ParseInt(fields[1], 10, 64)
 
-					if ts >= start {
+					if ts >= start || (time.Now().Unix()-ts) <= rekeyWindow {
 						return nil
 					}
 				}
