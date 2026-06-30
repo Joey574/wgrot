@@ -34,10 +34,10 @@ func watch(watcher *fsnotify.Watcher, pool *pool.Pool, sigCh chan os.Signal) {
 	for {
 		select {
 		case _ = <-sigCh:
+			fmt.Printf("recieved interupt, exitting")
 			return
 		case event, ok := <-watcher.Events:
 			if !ok {
-				fmt.Printf("event not ok")
 				continue
 			}
 
@@ -49,7 +49,6 @@ func watch(watcher *fsnotify.Watcher, pool *pool.Pool, sigCh chan os.Signal) {
 			}
 		case err, ok := <-watcher.Errors:
 			if !ok {
-				fmt.Printf("error not ok")
 				continue
 			}
 			fmt.Printf("watcher error: %v", err)
