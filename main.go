@@ -240,7 +240,7 @@ func waitForHandshake(iface, pubKey string, timeout time.Duration) error {
 	start := time.Now().Unix()
 
 	for time.Now().Before(deadline) {
-		out, err := exec.Command("wg", "show", iface, "latest-handshake").Output()
+		out, err := exec.Command("wg", "show", iface, "latest-handshakes").Output()
 
 		if err == nil {
 			for _, line := range strings.Split(string(out), "\n") {
