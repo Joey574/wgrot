@@ -2,7 +2,6 @@ package runner
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -20,9 +19,9 @@ func Start(state *state.State, pool *pool.Pool, iface string, interval, timeout 
 	signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP)
 
 	start := state.Next(pool)
-	log.Printf("applying startup config: %s", start.Name)
+	fmt.Printf("applying startup config: %s", start.Name)
 	if err := rotateTo(start, iface, timeout); err != nil {
-		log.Printf("startup config %s failed to come up: %v", start.Name, err)
+		fmt.Printf("startup config %s failed to come up: %v", start.Name, err)
 	}
 
 	ticker := time.NewTicker(interval)
@@ -32,11 +31,11 @@ func Start(state *state.State, pool *pool.Pool, iface string, interval, timeout 
 		select {
 		case sig := <-sigCh:
 			if sig == syscall.SIGHUP {
-				log.Println("SIGHUP recieved, rotating now")
+				fmt.Println("SIGHUP recieved, rotating now")
 				doRotate(state, pool, iface, timeout)
 				continue
 			}
-			log.Println("shuting down")
+			fmt.Println("shuting down")
 			return
 		case <-ticker.C:
 			doRotate(state, pool, iface, timeout)
@@ -47,10 +46,10 @@ func Start(state *state.State, pool *pool.Pool, iface string, interval, timeout 
 func doRotate(state *state.State, pool *pool.Pool, iface string, timeout time.Duration) {
 	for {
 		next := state.Next(pool)
-		log.Printf("rotating to %s", next.Name)
+		fmt.Printf("rotating to %s", next.Name)
 
 		if err := rotateTo(next, iface, timeout); err != nil {
-			log.Printf("rotation to %s failed: %v - attempting next...", next.Name, err)
+			fmt.Printf("rotation to %s failed: %v - attempting next...", next.Name, err)
 			time.Sleep(1 * time.Second)
 			continue
 		}

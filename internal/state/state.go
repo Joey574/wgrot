@@ -2,7 +2,7 @@ package state
 
 import (
 	"encoding/json"
-	"log"
+	"fmt"
 	"os"
 	"wgrot/v2/internal/peer"
 	"wgrot/v2/internal/pool"
@@ -35,12 +35,12 @@ func (s *State) Load(pool *pool.Pool) {
 func (s *State) Save() {
 	data, err := json.MarshalIndent(s, "", "  ")
 	if err != nil {
-		log.Printf("marshal state: %v", err)
+		fmt.Printf("marshal state: %v", err)
 		return
 	}
 
 	if err := os.WriteFile(s.savePath, data, 0o600); err != nil {
-		log.Printf("write state: %v", err)
+		fmt.Printf("write state: %v", err)
 	}
 }
 

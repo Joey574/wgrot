@@ -11,14 +11,17 @@ import (
 
 type Pool struct {
 	Peers []peer.Peer
+	Dir   string
 }
 
-func NewPool() *Pool {
-	return &Pool{}
+func NewPool(dir string) *Pool {
+	return &Pool{
+		Dir: dir,
+	}
 }
 
-func (p *Pool) Load(dir string) error {
-	entries, err := os.ReadDir(dir)
+func (p *Pool) Load() error {
+	entries, err := os.ReadDir(p.Dir)
 	if err != nil {
 		return nil
 	}
@@ -33,13 +36,13 @@ func (p *Pool) Load(dir string) error {
 
 	var configs []peer.Peer
 	for _, n := range names {
-		p := peer.NewPeer()
-		if err := p.Load(filepath.Join(dir, n)); err != nil {
+		peer := peer.NewPeer()
+		if err := peer.Load(filepath.Join(p.Dir, n)); err != nil {
 			return err
 		}
 
-		p.Name = n
-		configs = append(configs, p)
+		peer.Name = n
+		configs = append(configs, peer)
 	}
 	if len(configs) == 0 {
 		return fmt.Errorf("no configs present")
@@ -47,4 +50,8 @@ func (p *Pool) Load(dir string) error {
 
 	p.Peers = configs
 	return nil
+}
+
+func (p *Pool) Append(path string) {
+
 }

@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"log"
 	"time"
 	"wgrot/v2/internal/pool"
@@ -18,16 +19,16 @@ func main() {
 	timeout := flag.Duration("timeout", 15*time.Second, "handshake timeout")
 	flag.Parse()
 
-	pool := pool.NewPool()
-	if err := pool.Load(*poolDir); err != nil {
+	pool := pool.NewPool(*poolDir)
+	if err := pool.Load(); err != nil {
 		log.Fatalf("loading pool: %v\n", err)
 	}
-	log.Printf("loaded %d configs from %s", len(pool.Peers), *poolDir)
+	fmt.Printf("loaded %d configs from %s", len(pool.Peers), *poolDir)
 
-	if err := watcher.Monitor(*poolDir); err != nil {
+	if err := watcher.Monitor(pool); err != nil {
 		log.Fatalf("monitoring directory: %v", err)
 	}
-	log.Printf("monitoring %s for new configs", *poolDir)
+	fmt.Printf("monitoring %s for new configs", *poolDir)
 
 	state := state.NewState(*statePath)
 	state.Load(pool)
