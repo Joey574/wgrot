@@ -35,12 +35,12 @@ func (s *State) Load(pool *pool.Pool) {
 func (s *State) Save() {
 	data, err := json.MarshalIndent(s, "", "  ")
 	if err != nil {
-		fmt.Printf("marshal state: %v", err)
+		fmt.Printf("marshal state: %v\n", err)
 		return
 	}
 
 	if err := os.WriteFile(s.savePath, data, 0o600); err != nil {
-		fmt.Printf("write state: %v", err)
+		fmt.Printf("write state: %v\n", err)
 	}
 }
 

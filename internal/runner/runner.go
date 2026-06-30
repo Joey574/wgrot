@@ -19,9 +19,9 @@ func Start(state *state.State, pool *pool.Pool, iface string, interval, timeout 
 	signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP)
 
 	start := state.Next(pool)
-	fmt.Printf("applying startup config: %s", start.Name)
+	fmt.Printf("applying startup config: %s\n", start.Name)
 	if err := rotateTo(start, iface, timeout); err != nil {
-		fmt.Printf("startup config %s failed to come up: %v", start.Name, err)
+		fmt.Printf("startup config %s failed to come up: %v\n", start.Name, err)
 	}
 
 	ticker := time.NewTicker(interval)
@@ -46,10 +46,10 @@ func Start(state *state.State, pool *pool.Pool, iface string, interval, timeout 
 func doRotate(state *state.State, pool *pool.Pool, iface string, timeout time.Duration) {
 	for {
 		next := state.Next(pool)
-		fmt.Printf("rotating to %s", next.Name)
+		fmt.Printf("rotating to %s\n", next.Name)
 
 		if err := rotateTo(next, iface, timeout); err != nil {
-			fmt.Printf("rotation to %s failed: %v - attempting next...", next.Name, err)
+			fmt.Printf("rotation to %s failed: %v - attempting next...\n", next.Name, err)
 			time.Sleep(1 * time.Second)
 			continue
 		}

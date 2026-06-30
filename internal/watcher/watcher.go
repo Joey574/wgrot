@@ -34,7 +34,7 @@ func watch(watcher *fsnotify.Watcher, pool *pool.Pool, sigCh chan os.Signal) {
 	for {
 		select {
 		case _ = <-sigCh:
-			fmt.Printf("recieved interupt, exitting")
+			fmt.Println("recieved interupt, exitting")
 			return
 		case event, ok := <-watcher.Events:
 			if !ok {
@@ -42,7 +42,7 @@ func watch(watcher *fsnotify.Watcher, pool *pool.Pool, sigCh chan os.Signal) {
 			}
 
 			if event.Has(fsnotify.Create) {
-				fmt.Printf("loading new config: %s", event.Name)
+				fmt.Printf("loading new config: %s\n", event.Name)
 				time.Sleep(1 * time.Second) // give time for file operations to complete
 
 				pool.Append(event.Name)
@@ -51,7 +51,7 @@ func watch(watcher *fsnotify.Watcher, pool *pool.Pool, sigCh chan os.Signal) {
 			if !ok {
 				continue
 			}
-			fmt.Printf("watcher error: %v", err)
+			fmt.Printf("watcher error: %v\n", err)
 		}
 	}
 }

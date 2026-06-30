@@ -23,12 +23,12 @@ func main() {
 	if err := pool.Load(); err != nil {
 		log.Fatalf("loading pool: %v\n", err)
 	}
-	fmt.Printf("loaded %d configs from %s", len(pool.Peers), *poolDir)
+	fmt.Printf("loaded %d configs from %s\n", len(pool.Peers), *poolDir)
 
 	if err := watcher.Monitor(pool); err != nil {
 		log.Fatalf("monitoring directory: %v", err)
 	}
-	fmt.Printf("monitoring %s for new configs", *poolDir)
+	fmt.Printf("monitoring %s for new configs\n", *poolDir)
 
 	state := state.NewState(*statePath)
 	state.Load(pool)
