@@ -41,12 +41,12 @@ func main() {
 
 	interval, err := time.ParseDuration(*intervalStr)
 	if err != nil {
-		log.Fatalln("invalid interval: %v", err)
+		log.Fatalf("invalid interval: %v\n", err)
 	}
 
 	configs, err := loadPool(*poolDir)
 	if err != nil {
-		log.Fatalln("loading pool: %v", err)
+		log.Fatalf("loading pool: %v\n", err)
 	}
 
 	if len(configs) == 0 {
@@ -182,7 +182,7 @@ func parseConfig(path string) (Peer, error) {
 		return c, err
 	}
 
-	if c.PrivateKey == "" || c.Address == "" || c.PublicKey == "" || c.AllowedIPs == "" || c.Endpoint == "" || c.Keepalive == "" {
+	if c.PrivateKey == "" || len(c.Address) == 0 || c.PublicKey == "" || c.AllowedIPs == "" || c.Endpoint == "" || c.Keepalive == "" {
 		return c, fmt.Errorf("missing required field")
 	}
 
