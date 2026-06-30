@@ -94,19 +94,21 @@ func main() {
 
 func doRotate(iface string, configs []Peer, idx *int, state *State, statePath string, timeout time.Duration) {
 	next := *idx
-	log.Printf("rotating to %s", configs[next].Name)
-	if err := rotateTo(iface, configs, next, timeout); err != nil {
-		log.Printf("rotation to %s failed: %v - rolling back to %s", configs[next].Name, err, configs[state.LastGood].Name)
 
-		if rbErr := rotateTo(iface, configs, state.LastGood, timeout); rbErr != nil {
-			log.Printf("rollback to %s failed: %v", configs[state.LastGood].Name, rbErr)
+	for {
+		log.Printf("rotating to %s", configs[next].Name)
+		if err := rotateTo(iface, configs, next, timeout); err != nil {
+			log.Printf("rotation to %s failed: %v - attempting next...", configs[next].Name, err)
+			next = (next + 1) % len(configs)
+			time.Sleep(1 * time.Second)
+			continue
 		}
 
-		*idx = state.LastGood
-		return
+		break
 	}
 
 	state.LastGood = next
+	*idx = state.LastGood
 	saveState(statePath, *state)
 }
 
