@@ -16,13 +16,13 @@ func Monitor(pool *pool.Pool) error {
 	if err != nil {
 		return err
 	}
-	defer watcher.Close()
 
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT)
 
 	err = watcher.Add(pool.Dir)
 	if err != nil {
+		watcher.Close()
 		return err
 	}
 
@@ -31,10 +31,12 @@ func Monitor(pool *pool.Pool) error {
 }
 
 func watch(watcher *fsnotify.Watcher, pool *pool.Pool, sigCh chan os.Signal) {
+	defer watcher.Close()
+
 	for {
 		select {
 		case _ = <-sigCh:
-			fmt.Println("recieved interupt, exitting")
+			fmt.Println("recieved interrupt, exitting")
 			return
 		case event, ok := <-watcher.Events:
 			if !ok {
