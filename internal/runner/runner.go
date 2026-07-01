@@ -1,7 +1,9 @@
 package runner
 
 import (
+	"context"
 	"fmt"
+	"net/http"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -16,7 +18,7 @@ import (
 
 const rekeyWindow = int64(3 * 60)
 
-func Start(state *state.State, pool *pool.Pool, iface string, interval, timeout time.Duration) {
+func Start(state *state.State, pool *pool.Pool, iface string, refreshInterval, verifyInterval, timeout time.Duration) {
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP)
 
@@ -26,8 +28,11 @@ func Start(state *state.State, pool *pool.Pool, iface string, interval, timeout 
 		fmt.Printf("startup config %s failed to come up: %v\n", start.Name, err)
 	}
 
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
+	refresh := time.NewTicker(refreshInterval)
+	defer refresh.Stop()
+
+	verify := time.NewTicker(verifyInterval)
+	defer verify.Stop()
 
 	for {
 		select {
@@ -39,10 +44,54 @@ func Start(state *state.State, pool *pool.Pool, iface string, interval, timeout 
 			}
 			fmt.Println("shuting down")
 			return
-		case <-ticker.C:
+		case <-refresh.C:
+			doRotate(state, pool, iface, timeout)
+		case <-verify.C:
+			fmt.Println("checking network status...")
+			if isConnected() {
+				fmt.Println("network status ok")
+				continue
+			}
+
+			fmt.Println("network down, rotating now")
 			doRotate(state, pool, iface, timeout)
 		}
 	}
+}
+
+func isConnected() bool {
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	urls := []string{
+		"http://clients3.google.com/generate_204",
+		"http://captive.apple.com/hotspot-detect.html",
+		"http://detectportal.firefox.com/success.txt",
+		"https://1.1.1.1/cdn-cgi/trace",
+	}
+
+	for _, url := range urls {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+		if err != nil {
+			fmt.Printf("creating request: %v\n", err)
+			continue
+		}
+
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			fmt.Printf("request error: %v\n", err)
+			continue
+		}
+
+		status := resp.StatusCode
+		resp.Body.Close()
+
+		if status == http.StatusOK || status == http.StatusNoContent {
+			return true
+		}
+	}
+
+	return false
 }
 
 func doRotate(state *state.State, pool *pool.Pool, iface string, timeout time.Duration) {
