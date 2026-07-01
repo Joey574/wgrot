@@ -131,27 +131,27 @@ func rotateTo(peer *peer.Peer, iface string, timeout time.Duration) error {
 	}
 
 	cmd1 := exec.Command("wg", "set", iface, "private-key", keyFile.Name(), "peer", peer.PublicKey, "endpoint", peer.Endpoint, "persistent-keepalive", peer.Keepalive, "allowed-ips", peer.AllowedIPs)
-	if err := cmd1.Run(); err != nil {
-		return fmt.Errorf("wg set: %w", err)
+	if out, err := cmd1.CombinedOutput(); err != nil {
+		return fmt.Errorf("wg set: %w: %s", err, string(out))
 	}
 
 	cmd2 := exec.Command("ip", "addr", "flush", "dev", iface, "scope", "global")
-	if err := cmd2.Run(); err != nil {
-		return fmt.Errorf("ip addr flush: %w", err)
+	if out, err := cmd2.CombinedOutput(); err != nil {
+		return fmt.Errorf("ip addr flush: %w: %s", err, string(out))
 	}
 
 	for i := range peer.Address {
 		addr := peer.Address[i]
 
 		cmd3 := exec.Command("ip", "addr", "add", addr, "dev", iface)
-		if err := cmd3.Run(); err != nil {
-			return fmt.Errorf("ip addr add %s: %w", addr, err)
+		if out, err := cmd3.CombinedOutput(); err != nil {
+			return fmt.Errorf("ip addr add %s: %w: %s", addr, err, string(out))
 		}
 	}
 
 	cmd4 := exec.Command("ip", "route", "replace", "default", "dev", iface)
-	if err := cmd4.Run(); err != nil {
-		return fmt.Errorf("ip route replace: %w", err)
+	if out, err := cmd4.CombinedOutput(); err != nil {
+		return fmt.Errorf("ip route replace: %w: %s", err, string(out))
 	}
 
 	return waitForHandshake(iface, peer.PublicKey, start, timeout)
