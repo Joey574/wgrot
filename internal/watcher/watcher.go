@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 	"wgrot/v2/internal/pool"
@@ -44,10 +45,9 @@ func watch(watcher *fsnotify.Watcher, pool *pool.Pool, sigCh chan os.Signal) {
 				return
 			}
 
-			if event.Has(fsnotify.Create) {
+			if event.Has(fsnotify.Create) && strings.HasSuffix(event.Name, ".conf") {
 				fmt.Printf("loading new config: %s\n", event.Name)
 				time.Sleep(1 * time.Second) // give time for file operations to complete
-
 				pool.Append(event.Name)
 			}
 		case err, ok := <-watcher.Errors:
