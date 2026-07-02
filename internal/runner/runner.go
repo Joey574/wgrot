@@ -1,9 +1,7 @@
 package runner
 
 import (
-	"context"
 	"fmt"
-	"net/http"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -34,6 +32,8 @@ func Start(state *state.State, pool *pool.Pool, iface string, refreshInterval, v
 	verify := time.NewTicker(verifyInterval)
 	defer verify.Stop()
 
+	monitor := newMonitor(verifyInterval)
+
 	for {
 		select {
 		case sig := <-sigCh:
@@ -47,9 +47,7 @@ func Start(state *state.State, pool *pool.Pool, iface string, refreshInterval, v
 		case <-refresh.C:
 			doRotate(state, pool, iface, timeout)
 		case <-verify.C:
-			fmt.Println("checking network status...")
-			if isConnected() {
-				fmt.Println("network status ok")
+			if monitor.IsConnected() {
 				continue
 			}
 
@@ -57,41 +55,6 @@ func Start(state *state.State, pool *pool.Pool, iface string, refreshInterval, v
 			doRotate(state, pool, iface, timeout)
 		}
 	}
-}
-
-func isConnected() bool {
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
-
-	urls := []string{
-		"http://clients3.google.com/generate_204",
-		"http://captive.apple.com/hotspot-detect.html",
-		"http://detectportal.firefox.com/success.txt",
-		"https://1.1.1.1/cdn-cgi/trace",
-	}
-
-	for _, url := range urls {
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-		if err != nil {
-			fmt.Printf("creating request: %v\n", err)
-			continue
-		}
-
-		resp, err := http.DefaultClient.Do(req)
-		if err != nil {
-			fmt.Printf("request error: %v\n", err)
-			continue
-		}
-
-		status := resp.StatusCode
-		resp.Body.Close()
-
-		if status == http.StatusOK || status == http.StatusNoContent {
-			return true
-		}
-	}
-
-	return false
 }
 
 func doRotate(state *state.State, pool *pool.Pool, iface string, timeout time.Duration) {
