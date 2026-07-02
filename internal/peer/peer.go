@@ -63,7 +63,11 @@ func (p *Peer) Load(path string) error {
 		case "publickey":
 			p.PublicKey = val
 		case "allowedips":
-			p.AllowedIPs = val
+			ips := strings.Split(val, ",")
+			for i := range ips {
+				ips[i] = strings.TrimSpace(ips[i])
+			}
+			p.AllowedIPs = strings.Join(ips, ",")
 		case "endpoint":
 			p.Endpoint = val
 		case "persistentkeepalive":

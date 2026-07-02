@@ -16,53 +16,73 @@ import (
 
 const rekeyWindow = int64(3 * 60)
 
-func Start(state *state.State, pool *pool.Pool, iface string, refreshInterval, verifyInterval, timeout time.Duration) {
+type Runner struct {
+	s       *state.State
+	p       *pool.Pool
+	m       *monitor
+	iface   string
+	refresh time.Duration
+	verify  time.Duration
+	timeout time.Duration
+}
+
+func NewRunner(state *state.State, pool *pool.Pool, iface string, refresh, verify, timeout time.Duration) *Runner {
+	return &Runner{
+		s:       state,
+		p:       pool,
+		m:       newMonitor(verify),
+		iface:   iface,
+		refresh: refresh,
+		verify:  verify,
+		timeout: timeout,
+	}
+}
+
+func (r *Runner) Start() {
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP)
 
-	start := state.Next(pool)
+	start := r.s.Next(r.p)
 	fmt.Printf("applying startup config: %s\n", start.Name)
-	if err := rotateTo(start, iface, timeout); err != nil {
+	if err := r.rotateTo(start); err != nil {
 		fmt.Printf("startup config %s failed to come up: %v\n", start.Name, err)
 	}
 
-	refresh := time.NewTicker(refreshInterval)
+	refresh := time.NewTicker(r.refresh)
 	defer refresh.Stop()
 
-	verify := time.NewTicker(verifyInterval)
+	verify := time.NewTicker(r.verify)
 	defer verify.Stop()
-
-	monitor := newMonitor(verifyInterval)
 
 	for {
 		select {
 		case sig := <-sigCh:
 			if sig == syscall.SIGHUP {
 				fmt.Println("SIGHUP recieved, rotating now")
-				doRotate(state, pool, iface, timeout)
+				r.rotate()
 				continue
 			}
 			fmt.Println("shuting down")
 			return
 		case <-refresh.C:
-			doRotate(state, pool, iface, timeout)
+			r.rotate()
 		case <-verify.C:
-			if monitor.IsConnected() {
+			if r.m.IsConnected() {
 				continue
 			}
 
 			fmt.Println("network down, rotating now")
-			doRotate(state, pool, iface, timeout)
+			r.rotate()
 		}
 	}
 }
 
-func doRotate(state *state.State, pool *pool.Pool, iface string, timeout time.Duration) {
+func (r *Runner) rotate() {
 	for {
-		next := state.Next(pool)
+		next := r.s.Next(r.p)
 		fmt.Printf("rotating to %s\n", next.Name)
 
-		if err := rotateTo(next, iface, timeout); err != nil {
+		if err := r.rotateTo(next); err != nil {
 			fmt.Printf("rotation to %s failed: %v - attempting next...\n", next.Name, err)
 			time.Sleep(1 * time.Second)
 			continue
@@ -71,10 +91,10 @@ func doRotate(state *state.State, pool *pool.Pool, iface string, timeout time.Du
 		break
 	}
 
-	state.Save()
+	r.s.Save()
 }
 
-func rotateTo(peer *peer.Peer, iface string, timeout time.Duration) error {
+func (r *Runner) rotateTo(peer *peer.Peer) error {
 	start := time.Now().Unix()
 
 	keyFile, err := os.CreateTemp("", "wg-key-*")
@@ -93,12 +113,12 @@ func rotateTo(peer *peer.Peer, iface string, timeout time.Duration) error {
 		return err
 	}
 
-	cmd1 := exec.Command("wg", "set", iface, "private-key", keyFile.Name(), "peer", peer.PublicKey, "endpoint", peer.Endpoint, "persistent-keepalive", peer.Keepalive, "allowed-ips", peer.AllowedIPs)
+	cmd1 := exec.Command("wg", "set", r.iface, "private-key", keyFile.Name(), "peer", peer.PublicKey, "endpoint", peer.Endpoint, "persistent-keepalive", peer.Keepalive, "allowed-ips", peer.AllowedIPs)
 	if out, err := cmd1.CombinedOutput(); err != nil {
 		return fmt.Errorf("wg set: %w: %s", err, string(out))
 	}
 
-	cmd2 := exec.Command("ip", "addr", "flush", "dev", iface, "scope", "global")
+	cmd2 := exec.Command("ip", "addr", "flush", "dev", r.iface, "scope", "global")
 	if out, err := cmd2.CombinedOutput(); err != nil {
 		return fmt.Errorf("ip addr flush: %w: %s", err, string(out))
 	}
@@ -106,25 +126,25 @@ func rotateTo(peer *peer.Peer, iface string, timeout time.Duration) error {
 	for i := range peer.Address {
 		addr := peer.Address[i]
 
-		cmd3 := exec.Command("ip", "addr", "add", addr, "dev", iface)
+		cmd3 := exec.Command("ip", "addr", "add", addr, "dev", r.iface)
 		if out, err := cmd3.CombinedOutput(); err != nil {
 			return fmt.Errorf("ip addr add %s: %w: %s", addr, err, string(out))
 		}
 	}
 
-	cmd4 := exec.Command("ip", "route", "replace", "default", "dev", iface)
+	cmd4 := exec.Command("ip", "route", "replace", "default", "dev", r.iface)
 	if out, err := cmd4.CombinedOutput(); err != nil {
 		return fmt.Errorf("ip route replace: %w: %s", err, string(out))
 	}
 
-	return waitForHandshake(iface, peer.PublicKey, start, timeout)
+	return r.waitForHandshake(peer.PublicKey, start)
 }
 
-func waitForHandshake(iface, pubKey string, start int64, timeout time.Duration) error {
-	deadline := time.Now().Add(timeout)
+func (r *Runner) waitForHandshake(pubKey string, start int64) error {
+	deadline := time.Now().Add(r.timeout)
 
 	for time.Now().Before(deadline) {
-		out, err := exec.Command("wg", "show", iface, "latest-handshakes").Output()
+		out, err := exec.Command("wg", "show", r.iface, "latest-handshakes").Output()
 
 		if err == nil {
 			for _, line := range strings.Split(string(out), "\n") {
@@ -143,5 +163,5 @@ func waitForHandshake(iface, pubKey string, start int64, timeout time.Duration) 
 		time.Sleep(time.Second)
 	}
 
-	return fmt.Errorf("no handshake within %s", timeout)
+	return fmt.Errorf("no handshake within %s", r.timeout)
 }

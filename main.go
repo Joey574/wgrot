@@ -16,7 +16,7 @@ func main() {
 	poolDir := flag.String("pool", "/etc/wgrot-pool", "directory of wireguard config pool")
 	statePath := flag.String("state", "", "state file path")
 	refresh := flag.Duration("refresh", 3*time.Hour, "rotation interval")
-	verify := flag.Duration("verify", 10*time.Second, "verify interval")
+	verify := flag.Duration("verify", 30*time.Second, "verify interval")
 	timeout := flag.Duration("timeout", 15*time.Second, "handshake timeout")
 	flag.Parse()
 
@@ -34,5 +34,6 @@ func main() {
 	state := state.NewState(*statePath)
 	state.Load(pool)
 
-	runner.Start(state, pool, *iface, *refresh, *verify, *timeout)
+	runner := runner.NewRunner(state, pool, *iface, *refresh, *verify, *timeout)
+	runner.Start()
 }
