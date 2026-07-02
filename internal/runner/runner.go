@@ -97,25 +97,26 @@ func (r *Runner) rotate() {
 func (r *Runner) rotateTo(peer *peer.Peer) error {
 	start := time.Now().Unix()
 
-	keyFile, err := os.CreateTemp("", "wg-key-*")
+	f, err := os.CreateTemp("", "wg-conf-*")
 	if err != nil {
 		return fmt.Errorf("creating tmp key file: %w", err)
 	}
-	defer os.Remove(keyFile.Name())
+	defer os.Remove(f.Name())
 
-	if err := keyFile.Chmod(0o600); err != nil {
-		keyFile.Close()
+	if err := f.Chmod(0o600); err != nil {
+		f.Close()
 		return err
 	}
 
-	if _, err := keyFile.WriteString(peer.PrivateKey); err != nil {
-		keyFile.Close()
+	if _, err := f.WriteString(peer.Config); err != nil {
+		f.Close()
 		return err
 	}
+	f.Close()
 
-	cmd1 := exec.Command("wg", "set", r.iface, "private-key", keyFile.Name(), "peer", peer.PublicKey, "endpoint", peer.Endpoint, "persistent-keepalive", peer.Keepalive, "allowed-ips", peer.AllowedIPs)
+	cmd1 := exec.Command("wg", "syncconf", r.iface, f.Name())
 	if out, err := cmd1.CombinedOutput(); err != nil {
-		return fmt.Errorf("wg set: %w: %s", err, string(out))
+		return fmt.Errorf("wg syncconf: %w: %s", err, string(out))
 	}
 
 	cmd2 := exec.Command("ip", "addr", "flush", "dev", r.iface, "scope", "global")
@@ -147,7 +148,7 @@ func (r *Runner) waitForHandshake(pubKey string, start int64) error {
 		out, err := exec.Command("wg", "show", r.iface, "latest-handshakes").Output()
 
 		if err == nil {
-			for _, line := range strings.Split(string(out), "\n") {
+			for line := range strings.SplitSeq(string(out), "\n") {
 				fields := strings.Fields(line)
 
 				if len(fields) == 2 && fields[0] == pubKey {

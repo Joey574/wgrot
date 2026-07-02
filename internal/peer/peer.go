@@ -15,6 +15,8 @@ type Peer struct {
 	Address    []string
 	AllowedIPs string
 	Keepalive  string
+	DNS        string
+	Config     string
 }
 
 func NewPeer() Peer {
@@ -27,7 +29,8 @@ func (p *Peer) IsValid() bool {
 		p.Endpoint != "" &&
 		len(p.Address) != 0 &&
 		p.AllowedIPs != "" &&
-		p.Keepalive != ""
+		p.Keepalive != "" &&
+		p.DNS != ""
 }
 
 func (p *Peer) Load(path string) error {
@@ -72,6 +75,8 @@ func (p *Peer) Load(path string) error {
 			p.Endpoint = val
 		case "persistentkeepalive":
 			p.Keepalive = val
+		case "dns":
+			p.DNS = val
 		}
 	}
 	if err := scanner.Err(); err != nil {
@@ -82,5 +87,7 @@ func (p *Peer) Load(path string) error {
 		return fmt.Errorf("config is invalid")
 	}
 
+	// create pre-prepared wg Config
+	p.Config = fmt.Sprintf("[Interface]\nPrivateKey = %s\n\n[Peer]\nPublicKey = %s\nEndpoint = %s\nAllowedIPs = %s\nPersistentKeepalive = %s", p.PrivateKey, p.PublicKey, p.Endpoint, p.AllowedIPs, p.Keepalive)
 	return nil
 }
