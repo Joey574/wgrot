@@ -83,7 +83,7 @@ func (r *Runner) rotate() {
 		fmt.Printf("rotating to %s\n", next.Name)
 
 		if err := r.rotateTo(next); err != nil {
-			fmt.Printf("rotation to %s failed: %v - attempting next...\n", next.Name, err)
+			fmt.Printf("rotation to %s failed: %v\n", next.Name, err)
 			time.Sleep(1 * time.Second)
 			continue
 		}

@@ -5,10 +5,13 @@ import (
 	"fmt"
 	"os"
 	"strings"
+
+	"github.com/gofrs/flock"
 )
 
 type Peer struct {
 	Name       string
+	Path       string
 	PrivateKey string
 	PublicKey  string
 	Endpoint   string
@@ -17,6 +20,9 @@ type Peer struct {
 	Keepalive  string
 	DNS        string
 	Config     string
+
+	lock     *flock.Flock
+	lockPath string
 }
 
 func NewPeer() Peer {
@@ -39,6 +45,9 @@ func (p *Peer) Load(path string) error {
 		return err
 	}
 	defer f.Close()
+
+	p.Path = path
+	p.lockPath = path + ".lock"
 
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
@@ -90,4 +99,15 @@ func (p *Peer) Load(path string) error {
 	// create pre-prepared wg Config
 	p.Config = fmt.Sprintf("[Interface]\nPrivateKey = %s\n\n[Peer]\nPublicKey = %s\nEndpoint = %s\nAllowedIPs = %s\nPersistentKeepalive = %s", p.PrivateKey, p.PublicKey, p.Endpoint, p.AllowedIPs, p.Keepalive)
 	return nil
+}
+
+func (p *Peer) TryLock() (bool, error) {
+	p.lock = flock.New(p.lockPath)
+	return p.lock.TryLock()
+}
+
+func (p *Peer) Unlock() error {
+	err := p.lock.Unlock()
+	_ = os.Remove(p.lockPath)
+	return err
 }
