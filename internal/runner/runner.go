@@ -38,7 +38,7 @@ func NewRunner(state *state.State, pool *pool.Pool, iface string, refresh, verif
 	}
 }
 
-func (r *Runner) Start() {
+func (r *Runner) Start(skipRefresh bool) {
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP)
 
@@ -48,11 +48,17 @@ func (r *Runner) Start() {
 		fmt.Printf("startup config %s failed to come up: %v\n", start.Name, err)
 	}
 
+	verifyCh := make(chan time.Time, 1)
+	if !skipRefresh {
+		go func() {
+			for t := range time.Tick(r.verify) {
+				verifyCh <- t
+			}
+		}()
+	}
+
 	refresh := time.NewTicker(r.refresh)
 	defer refresh.Stop()
-
-	verify := time.NewTicker(r.verify)
-	defer verify.Stop()
 
 	for {
 		select {
@@ -66,7 +72,7 @@ func (r *Runner) Start() {
 			return
 		case <-refresh.C:
 			r.rotate()
-		case <-verify.C:
+		case <-verifyCh:
 			if r.m.IsConnected() {
 				continue
 			}

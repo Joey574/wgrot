@@ -18,6 +18,7 @@ func main() {
 	refresh := flag.Duration("refresh", 3*time.Hour, "rotation interval")
 	verify := flag.Duration("verify", 30*time.Second, "verify interval")
 	timeout := flag.Duration("timeout", 15*time.Second, "handshake timeout")
+	skipRefresh := flag.Bool("skip-refresh", false, "skip rotating on interval")
 	flag.Parse()
 
 	pool := pool.NewPool(*poolDir)
@@ -35,5 +36,5 @@ func main() {
 	state.Load(pool)
 
 	runner := runner.NewRunner(state, pool, *iface, *refresh, *verify, *timeout)
-	runner.Start()
+	runner.Start(*skipRefresh)
 }
