@@ -102,18 +102,15 @@ func (r *Runner) rotate() {
 
 func (r *Runner) rotateTo(peer *peer.Peer) error {
 	start := time.Now().Unix()
-
 	f, err := os.CreateTemp("", "wg-conf-*")
 	if err != nil {
 		return fmt.Errorf("creating tmp key file: %w", err)
 	}
 	defer os.Remove(f.Name())
-
 	if err := f.Chmod(0o600); err != nil {
 		f.Close()
 		return err
 	}
-
 	if _, err := f.WriteString(peer.Config); err != nil {
 		f.Close()
 		return err
@@ -125,17 +122,31 @@ func (r *Runner) rotateTo(peer *peer.Peer) error {
 		return fmt.Errorf("wg syncconf: %w: %s", err, string(out))
 	}
 
-	cmd2 := exec.Command("ip", "addr", "flush", "dev", r.iface, "scope", "global")
-	if out, err := cmd2.CombinedOutput(); err != nil {
-		return fmt.Errorf("ip addr flush: %w: %s", err, string(out))
+	current, err := currentAddrs(r.iface)
+	if err != nil {
+		return fmt.Errorf("reading current addrs: %w", err)
+	}
+	want := make(map[string]bool, len(peer.Address))
+	for _, a := range peer.Address {
+		want[a] = true
 	}
 
-	for i := range peer.Address {
-		addr := peer.Address[i]
+	// Add anything missing first (ip addr replace is atomic per-address,
+	// never removes the address before re-adding it).
+	for addr := range want {
+		cmd := exec.Command("ip", "addr", "replace", addr, "dev", r.iface)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			return fmt.Errorf("ip addr replace %s: %w: %s", addr, err, string(out))
+		}
+	}
 
-		cmd3 := exec.Command("ip", "addr", "add", addr, "dev", r.iface)
-		if out, err := cmd3.CombinedOutput(); err != nil {
-			return fmt.Errorf("ip addr add %s: %w: %s", addr, err, string(out))
+	// Only remove addresses that are stale (not in the new peer's set).
+	for _, addr := range current {
+		if !want[addr] {
+			cmd := exec.Command("ip", "addr", "del", addr, "dev", r.iface)
+			if out, err := cmd.CombinedOutput(); err != nil {
+				return fmt.Errorf("ip addr del %s: %w: %s", addr, err, string(out))
+			}
 		}
 	}
 
@@ -143,8 +154,28 @@ func (r *Runner) rotateTo(peer *peer.Peer) error {
 	if out, err := cmd4.CombinedOutput(); err != nil {
 		return fmt.Errorf("ip route replace: %w: %s", err, string(out))
 	}
-
 	return r.waitForHandshake(peer.PublicKey, start)
+}
+
+func currentAddrs(iface string) ([]string, error) {
+	out, err := exec.Command("ip", "-o", "addr", "show", "dev", iface, "scope", "global").CombinedOutput()
+	if err != nil {
+		return nil, fmt.Errorf("%w: %s", err, string(out))
+	}
+	var addrs []string
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		if line == "" {
+			continue
+		}
+		fields := strings.Fields(line)
+		for i, f := range fields {
+			if f == "inet" || f == "inet6" {
+				addrs = append(addrs, fields[i+1])
+				break
+			}
+		}
+	}
+	return addrs, nil
 }
 
 func (r *Runner) waitForHandshake(pubKey string, start int64) error {
