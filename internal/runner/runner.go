@@ -46,6 +46,7 @@ func (r *Runner) Start(skipRefresh bool) {
 	fmt.Printf("applying startup config: %s\n", start.Name)
 	if err := r.rotateTo(start); err != nil {
 		fmt.Printf("startup config %s failed to come up: %v\n", start.Name, err)
+		r.rotate()
 	}
 
 	verifyCh := make(chan time.Time, 1)
