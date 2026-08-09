@@ -72,7 +72,7 @@ func (s *State) Next(pool *pool.Pool) *peer.Peer {
 		}
 
 		if !ok {
-			fmt.Println("peer already in use")
+			fmt.Printf("'%s' already in use\n", p.Name)
 		}
 
 		time.Sleep(500 * time.Millisecond)
