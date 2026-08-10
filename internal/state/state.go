@@ -2,11 +2,11 @@ package state
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
 	"time"
 	"wgrot/v2/internal/peer"
 	"wgrot/v2/internal/pool"
+	"wgrot/v2/internal/sink"
 )
 
 type State struct {
@@ -38,12 +38,12 @@ func (s *State) Load(pool *pool.Pool) {
 func (s *State) Save() {
 	data, err := json.MarshalIndent(s, "", "  ")
 	if err != nil {
-		fmt.Printf("marshal state: %v\n", err)
+		sink.Printf(sink.ERROR, "marshal state: %v\n", err)
 		return
 	}
 
 	if err := os.WriteFile(s.savePath, data, 0o600); err != nil {
-		fmt.Printf("write state: %v\n", err)
+		sink.Printf(sink.ERROR, "write state: %v\n", err)
 	}
 }
 
@@ -59,7 +59,7 @@ func (s *State) Next(pool *pool.Pool) *peer.Peer {
 		if ok && err == nil {
 			if s.lastPeer != nil {
 				if err = s.lastPeer.Unlock(); err != nil {
-					fmt.Printf("failed to unlock last: %v\n", err)
+					sink.Printf(sink.ERROR, "failed to unlock peer: %v\n", err)
 				}
 			}
 
@@ -68,11 +68,11 @@ func (s *State) Next(pool *pool.Pool) *peer.Peer {
 		}
 
 		if err != nil {
-			fmt.Printf("failed to lock: %v\n", err)
+			sink.Printf(sink.ERROR, "failed to lock peer: %v\n", err)
 		}
 
 		if !ok {
-			fmt.Printf("'%s' already in use\n", p.Name)
+			sink.Printf(sink.DEBUG, "peer already in use: '%s'\n", p.Name)
 		}
 
 		time.Sleep(500 * time.Millisecond)

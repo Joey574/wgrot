@@ -1,7 +1,10 @@
 package sink
 
 import (
+	"fmt"
 	"io"
+	"strings"
+	"time"
 )
 
 type LogLevel int8
@@ -53,18 +56,68 @@ func FlushSinks() {
 	sinks = nil
 }
 
-func SetFormat() error {
+// Sets the logging format string to be used, by default this is empty
+// \d => outputs the datetime
+// \t => writes the log type
+// * => log data
+// example
+// [\d] [\t] *
+func SetFormat(f string) error {
+	format = f
 	return nil
 }
 
 // Writes the set of bytes to the sink, exits early in event of error and returns it
-func Write(b []byte) error {
+func Write(l LogLevel, b []byte) error {
+	data := formatString(string(b), l)
 	for _, w := range sinks {
-		_, err := w.Write(b)
+		_, err := w.Write([]byte(data))
 		if err != nil {
 			return err
 		}
 	}
 
 	return nil
+}
+
+func WriteString(l LogLevel, s string) error {
+	return Write(l, []byte(s))
+}
+
+func Printf(l LogLevel, format string, a ...any) error {
+	return WriteString(l, fmt.Sprintf(format, a...))
+}
+
+func Println(l LogLevel, a ...any) error {
+	return WriteString(l, fmt.Sprintln(a...))
+}
+
+func Print(l LogLevel, a ...any) error {
+	return WriteString(l, fmt.Sprint(a...))
+}
+
+func formatString(data string, level LogLevel) string {
+	if format == "" {
+		return data
+	}
+
+	lvl := "UNKN"
+	switch level {
+	case QUIET:
+		lvl = "QUIET"
+	case ERROR:
+		lvl = "ERROR"
+	case WARN:
+		lvl = "WARN"
+	case INFO:
+		lvl = "INFO"
+	case DEBUG:
+		lvl = "DEBUG"
+	case TRACE:
+		lvl = "TRACE"
+	}
+
+	out := strings.ReplaceAll(format, "*", data)
+	out = strings.ReplaceAll(out, "\\d", time.Now().Format("2006-01-02 15:04:05"))
+	return strings.ReplaceAll(out, "\\t", lvl)
 }

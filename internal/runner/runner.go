@@ -132,8 +132,6 @@ func (r *Runner) rotateTo(peer *peer.Peer) error {
 		want[a] = true
 	}
 
-	// Add anything missing first (ip addr replace is atomic per-address,
-	// never removes the address before re-adding it).
 	for addr := range want {
 		cmd := exec.Command("ip", "addr", "replace", addr, "dev", r.iface)
 		if out, err := cmd.CombinedOutput(); err != nil {
@@ -141,7 +139,6 @@ func (r *Runner) rotateTo(peer *peer.Peer) error {
 		}
 	}
 
-	// Only remove addresses that are stale (not in the new peer's set).
 	for _, addr := range current {
 		if !want[addr] {
 			cmd := exec.Command("ip", "addr", "del", addr, "dev", r.iface)
