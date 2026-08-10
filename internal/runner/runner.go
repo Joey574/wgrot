@@ -49,17 +49,17 @@ func (r *Runner) Start(skipRefresh bool) {
 		r.rotate()
 	}
 
-	verifyCh := make(chan time.Time, 1)
+	refresh := make(chan time.Time, 1)
 	if !skipRefresh {
 		go func() {
-			for t := range time.Tick(r.verify) {
-				verifyCh <- t
+			for t := range time.Tick(r.refresh) {
+				refresh <- t
 			}
 		}()
 	}
 
-	refresh := time.NewTicker(r.refresh)
-	defer refresh.Stop()
+	verify := time.NewTicker(r.verify)
+	defer verify.Stop()
 
 	for {
 		select {
@@ -71,9 +71,9 @@ func (r *Runner) Start(skipRefresh bool) {
 			}
 			fmt.Println("shuting down")
 			return
-		case <-refresh.C:
+		case <-refresh:
 			r.rotate()
-		case <-verifyCh:
+		case <-verify.C:
 			if r.m.IsConnected() {
 				continue
 			}
