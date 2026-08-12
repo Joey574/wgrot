@@ -59,7 +59,7 @@ func (m *monitor) IsConnected() bool {
 	for _, req := range m.requests {
 		resp, err := m.client.Do(req)
 		if err != nil {
-			sink.Printf(sink.DEBUG, "%v", err)
+			sink.Printf(sink.TRACE, "%v\n", err)
 			continue
 		}
 
@@ -68,6 +68,7 @@ func (m *monitor) IsConnected() bool {
 		resp.Body.Close()
 
 		if status == http.StatusOK || status == http.StatusNoContent {
+			m.failed = 0
 			return true
 		}
 	}
