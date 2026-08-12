@@ -75,6 +75,6 @@ func (s *State) Next(pool *pool.Pool) *peer.Peer {
 			sink.Printf(sink.DEBUG, "peer already in use: '%s'\n", p.Name)
 		}
 
-		time.Sleep(500 * time.Millisecond)
+		time.Sleep(1 * time.Second)
 	}
 }

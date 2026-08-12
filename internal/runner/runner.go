@@ -85,13 +85,29 @@ func (r *Runner) Start(skipRefresh bool) {
 }
 
 func (r *Runner) rotate() {
+	failed := 0
+
+	var start *peer.Peer
 	for {
 		next := r.s.Next(r.p)
+		// we've completed a full loop, sleep for a longer period
+		if start == next {
+			failed++
+
+			// increasingly back off to a max of an hour every time we complete a full cycle of the pool
+			t := min(time.Hour, 5*time.Duration(failed)*time.Minute)
+			time.Sleep(t)
+		}
+
+		// populate start
+		if start == nil {
+			start = next
+		}
 		fmt.Printf("rotating to %s\n", next.Name)
 
 		if err := r.rotateTo(next); err != nil {
 			fmt.Printf("rotation to %s failed: %v\n", next.Name, err)
-			time.Sleep(1 * time.Second)
+			time.Sleep(5 * time.Second)
 			continue
 		}
 
