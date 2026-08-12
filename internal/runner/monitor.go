@@ -5,11 +5,15 @@ import (
 	"io"
 	"net/http"
 	"time"
+	"wgrot/v2/internal/sink"
 )
 
 type monitor struct {
 	client   *http.Client
 	requests []*http.Request
+
+	tolerance int
+	failed    int
 }
 
 func newMonitor(interval time.Duration) *monitor {
@@ -33,7 +37,7 @@ func newMonitor(interval time.Duration) *monitor {
 	}
 
 	client := http.Client{
-		Timeout: 2 * time.Second,
+		Timeout: 5 * time.Second,
 		Transport: &http.Transport{
 			MaxIdleConns:        len(urls),
 			MaxIdleConnsPerHost: 1,
@@ -44,8 +48,10 @@ func newMonitor(interval time.Duration) *monitor {
 	}
 
 	return &monitor{
-		client:   &client,
-		requests: reqs,
+		client:    &client,
+		requests:  reqs,
+		failed:    0,
+		tolerance: 5,
 	}
 }
 
@@ -53,6 +59,7 @@ func (m *monitor) IsConnected() bool {
 	for _, req := range m.requests {
 		resp, err := m.client.Do(req)
 		if err != nil {
+			sink.Printf(sink.DEBUG, "%v", err)
 			continue
 		}
 
@@ -65,5 +72,12 @@ func (m *monitor) IsConnected() bool {
 		}
 	}
 
+	m.failed++
+	if m.failed <= m.tolerance {
+		sink.Printf(sink.WARN, "test connection failed, %d/%d failures\n", m.failed, m.tolerance)
+		return true
+	}
+
+	sink.Println(sink.ERROR, "test connection exceeded tolerance")
 	return false
 }

@@ -47,7 +47,8 @@ func (r *Runner) Start(skipRefresh bool) {
 	sink.Printf(sink.DEBUG, "applying startup config: %s\n", start.Name)
 	if err := r.rotateTo(start); err != nil {
 		sink.Printf(sink.ERROR, "%s failed to come up: %v", start.Name, err)
-		r.rotate()
+	} else {
+		sink.Printf(sink.DEBUG, "startup config %s online", start.Name)
 	}
 
 	refresh := make(chan time.Time, 1)
@@ -103,14 +104,15 @@ func (r *Runner) rotate() {
 		if start == nil {
 			start = next
 		}
-		sink.Printf(sink.INFO, "rotating to %s\n", next.Name)
 
+		sink.Printf(sink.INFO, "rotating to %s\n", next.Name)
 		if err := r.rotateTo(next); err != nil {
 			sink.Printf(sink.ERROR, "rotation to %s failed: %v\n", next.Name, err)
 			time.Sleep(5 * time.Second)
 			continue
 		}
 
+		sink.Printf(sink.INFO, "rotation to %s complete\n", next.Name)
 		break
 	}
 
@@ -170,6 +172,7 @@ func (r *Runner) rotateTo(peer *peer.Peer) error {
 	if out, err := cmd4.CombinedOutput(); err != nil {
 		return fmt.Errorf("ip route replace: %w: %s", err, string(out))
 	}
+
 	return r.waitForHandshake(peer.PublicKey, start)
 }
 
