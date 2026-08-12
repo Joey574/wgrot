@@ -11,6 +11,7 @@ import (
 	"time"
 	"wgrot/v2/internal/peer"
 	"wgrot/v2/internal/pool"
+	"wgrot/v2/internal/sink"
 	"wgrot/v2/internal/state"
 )
 
@@ -65,11 +66,11 @@ func (r *Runner) Start(skipRefresh bool) {
 		select {
 		case sig := <-sigCh:
 			if sig == syscall.SIGHUP {
-				fmt.Println("SIGHUP recieved, rotating now")
+				sink.Println(sink.DEBUG, "SIGHUP recieved")
 				r.rotate()
 				continue
 			}
-			fmt.Println("shuting down")
+			sink.Println(sink.INFO, "shutting down")
 			return
 		case <-refresh:
 			r.rotate()
@@ -78,7 +79,7 @@ func (r *Runner) Start(skipRefresh bool) {
 				continue
 			}
 
-			fmt.Println("network down, rotating now")
+			sink.Println(sink.ERROR, "network down")
 			r.rotate()
 		}
 	}
@@ -90,12 +91,11 @@ func (r *Runner) rotate() {
 	var start *peer.Peer
 	for {
 		next := r.s.Next(r.p)
-		// we've completed a full loop, sleep for a longer period
 		if start == next {
-			failed++
-
 			// increasingly back off to a max of an hour every time we complete a full cycle of the pool
+			failed++
 			t := min(time.Hour, 5*time.Duration(failed)*time.Minute)
+			sink.Printf(sink.ERROR, "failed through pool, sleeping for %s\n", t.String())
 			time.Sleep(t)
 		}
 
@@ -103,10 +103,10 @@ func (r *Runner) rotate() {
 		if start == nil {
 			start = next
 		}
-		fmt.Printf("rotating to %s\n", next.Name)
+		sink.Printf(sink.INFO, "rotating to %s\n", next.Name)
 
 		if err := r.rotateTo(next); err != nil {
-			fmt.Printf("rotation to %s failed: %v\n", next.Name, err)
+			sink.Printf(sink.ERROR, "rotation to %s failed: %v\n", next.Name, err)
 			time.Sleep(5 * time.Second)
 			continue
 		}

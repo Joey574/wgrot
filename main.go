@@ -23,7 +23,7 @@ func main() {
 	flag.Parse()
 
 	sink.PushSinks(os.Stdout)
-	sink.SetFormat("[\\d] [\\t] *")
+	sink.SetFormat("[\\t] *")
 
 	pool := pool.NewPool(*poolDir)
 	if err := pool.Load(); err != nil {
