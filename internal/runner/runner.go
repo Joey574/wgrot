@@ -44,9 +44,9 @@ func (r *Runner) Start(skipRefresh bool) {
 	signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP)
 
 	start := r.s.Next(r.p)
-	fmt.Printf("applying startup config: %s\n", start.Name)
+	sink.Printf(sink.DEBUG, "applying startup config: %s\n", start.Name)
 	if err := r.rotateTo(start); err != nil {
-		fmt.Printf("startup config %s failed to come up: %v\n", start.Name, err)
+		sink.Printf(sink.ERROR, "%s failed to come up: %v", start.Name, err)
 		r.rotate()
 	}
 
@@ -128,10 +128,12 @@ func (r *Runner) rotateTo(peer *peer.Peer) error {
 		f.Close()
 		return err
 	}
+
 	if _, err := f.WriteString(peer.Config); err != nil {
 		f.Close()
 		return err
 	}
+
 	f.Close()
 
 	cmd1 := exec.Command("wg", "syncconf", r.iface, f.Name())
