@@ -8,6 +8,7 @@ import (
 	"syscall"
 	"time"
 	"wgrot/v2/internal/pool"
+	"wgrot/v2/internal/sink"
 
 	"github.com/fsnotify/fsnotify"
 )
@@ -46,9 +47,11 @@ func watch(watcher *fsnotify.Watcher, pool *pool.Pool, sigCh chan os.Signal) {
 			}
 
 			if event.Has(fsnotify.Create) && strings.HasSuffix(event.Name, ".conf") {
-				fmt.Printf("loading new config: %s\n", event.Name)
-				time.Sleep(1 * time.Second) // give time for file operations to complete
-				pool.Append(event.Name)
+				handleCreate(&event, pool)
+			}
+
+			if event.Has(fsnotify.Remove) && strings.HasSuffix(event.Name, ".conf") {
+				handleRemove(&event, pool)
 			}
 		case err, ok := <-watcher.Errors:
 			if !ok {
@@ -58,4 +61,16 @@ func watch(watcher *fsnotify.Watcher, pool *pool.Pool, sigCh chan os.Signal) {
 			fmt.Printf("watcher error: %v\n", err)
 		}
 	}
+}
+
+func handleCreate(event *fsnotify.Event, pool *pool.Pool) {
+	sink.Printf(sink.DEBUG, "loading new config: %s\n", event.Name)
+	time.Sleep(time.Second) // give time for event to complete
+	pool.Append(event.Name)
+}
+
+func handleRemove(event *fsnotify.Event, pool *pool.Pool) {
+	sink.Printf(sink.DEBUG, "removing config from pool: %s", event.Name)
+	time.Sleep(time.Second) // give time for event to complete
+	go pool.Remove(event.Name)
 }

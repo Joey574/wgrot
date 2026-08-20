@@ -71,8 +71,8 @@ func (p *Pool) Append(path string) {
 }
 
 func (p *Pool) Count() int {
-	p.mx.Lock()
-	defer p.mx.Unlock()
+	p.mx.RLock()
+	defer p.mx.RUnlock()
 	return len(p.peers)
 }
 
@@ -88,11 +88,13 @@ func (p *Pool) UsableCount() int {
 
 	count := 0
 	for _, peer := range p.peers {
-		if ok, err := peer.TryLock(); ok && err == nil {
-			count++
-		}
+		if ok, err := peer.TryLock(); ok {
+			peer.Unlock()
 
-		peer.Unlock()
+			if err == nil {
+				count++
+			}
+		}
 	}
 
 	return count
@@ -106,4 +108,17 @@ func (p *Pool) At(idx int) *peer.Peer {
 	}
 
 	return &p.peers[idx]
+}
+
+func (p *Pool) Remove(path string) {
+	for i, peer := range p.peers {
+		if peer.Path == path {
+			// if peer is in use by us, we'll sleep until we give it up
+			for peer.IsLocked() {
+				time.Sleep(time.Second)
+			}
+
+			p.peers = slices.Delete(p.peers, i, i+1)
+		}
+	}
 }

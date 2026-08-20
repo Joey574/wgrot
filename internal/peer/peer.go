@@ -48,6 +48,7 @@ func (p *Peer) Load(path string) error {
 
 	p.Path = path
 	p.lockPath = path + ".lock"
+	p.lock = flock.New(p.lockPath)
 
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
@@ -102,12 +103,26 @@ func (p *Peer) Load(path string) error {
 }
 
 func (p *Peer) TryLock() (bool, error) {
-	p.lock = flock.New(p.lockPath)
+	if p.lock == nil {
+		return false, fmt.Errorf("must load peer first")
+	}
+
 	return p.lock.TryLock()
 }
 
 func (p *Peer) Unlock() error {
-	err := p.lock.Unlock()
-	_ = os.Remove(p.lockPath)
-	return err
+	defer os.Remove(p.lockPath)
+	if p.lock == nil {
+		return nil
+	}
+
+	return p.lock.Unlock()
+}
+
+func (p *Peer) IsLocked() bool {
+	if p.lock == nil {
+		return false
+	}
+
+	return p.lock.Locked()
 }
