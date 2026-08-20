@@ -52,10 +52,11 @@ func (r *Runner) Start(skipRefresh bool) {
 		sink.Printf(sink.DEBUG, "startup config %s online", start.Name)
 	}
 
-	var refresh *time.Ticker
+	var refresh <-chan time.Time
 	if !skipRefresh {
-		refresh = time.NewTicker(r.refresh)
-		defer refresh.Stop()
+		refreshTicker := time.NewTicker(r.refresh)
+		defer refreshTicker.Stop()
+		refresh = refreshTicker.C
 	}
 
 	verify := time.NewTicker(r.verify)
@@ -71,7 +72,7 @@ func (r *Runner) Start(skipRefresh bool) {
 			}
 			sink.Println(sink.INFO, "shutting down")
 			return
-		case <-refresh.C:
+		case <-refresh:
 			r.rotate(sigCh)
 		case <-verify.C:
 			if r.m.IsConnected() {
