@@ -3,6 +3,7 @@ package sink
 import (
 	"fmt"
 	"io"
+	"os"
 	"strings"
 	"time"
 )
@@ -69,15 +70,12 @@ func SetFormat(f string) error {
 
 // Writes the set of bytes to the sink, exits early in event of error and returns it
 func Write(l LogLevel, b []byte) error {
-	data := formatString(string(b), l)
-	for _, w := range sinks {
-		_, err := w.Write([]byte(data))
-		if err != nil {
-			return err
-		}
+	if l > level {
+		return nil
 	}
 
-	return nil
+	data := formatString(string(b), l)
+	return writeToSinks([]byte(data))
 }
 
 func WriteString(l LogLevel, s string) error {
@@ -94,6 +92,32 @@ func Println(l LogLevel, a ...any) error {
 
 func Print(l LogLevel, a ...any) error {
 	return WriteString(l, fmt.Sprint(a...))
+}
+
+func Fatal(v ...any) {
+	writeToSinks(fmt.Append(nil, v...))
+	os.Exit(1)
+}
+
+func Fatalf(format string, a ...any) {
+	writeToSinks(fmt.Appendf(nil, format, a...))
+	os.Exit(1)
+}
+
+func Fatalln(v ...any) {
+	writeToSinks(fmt.Appendln(nil, v...))
+	os.Exit(1)
+}
+
+func writeToSinks(b []byte) error {
+	for _, w := range sinks {
+		_, err := w.Write(b)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func formatString(data string, level LogLevel) string {

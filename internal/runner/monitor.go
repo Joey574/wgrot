@@ -37,7 +37,7 @@ func newMonitor(interval time.Duration) *monitor {
 	}
 
 	client := http.Client{
-		Timeout: 5 * time.Second,
+		Timeout: 8 * time.Second,
 		Transport: &http.Transport{
 			MaxIdleConns:        len(urls),
 			MaxIdleConnsPerHost: 1,

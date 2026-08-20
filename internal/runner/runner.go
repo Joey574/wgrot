@@ -1,6 +1,7 @@
 package runner
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -51,13 +52,10 @@ func (r *Runner) Start(skipRefresh bool) {
 		sink.Printf(sink.DEBUG, "startup config %s online", start.Name)
 	}
 
-	refresh := make(chan time.Time, 1)
+	var refresh *time.Ticker
 	if !skipRefresh {
-		go func() {
-			for t := range time.Tick(r.refresh) {
-				refresh <- t
-			}
-		}()
+		refresh = time.NewTicker(r.refresh)
+		defer refresh.Stop()
 	}
 
 	verify := time.NewTicker(r.verify)
@@ -68,55 +66,70 @@ func (r *Runner) Start(skipRefresh bool) {
 		case sig := <-sigCh:
 			if sig == syscall.SIGHUP {
 				sink.Println(sink.DEBUG, "SIGHUP recieved")
-				r.rotate()
+				r.rotate(sigCh)
 				continue
 			}
 			sink.Println(sink.INFO, "shutting down")
 			return
-		case <-refresh:
-			r.rotate()
+		case <-refresh.C:
+			r.rotate(sigCh)
 		case <-verify.C:
 			if r.m.IsConnected() {
 				continue
 			}
 
 			sink.Println(sink.ERROR, "network down")
-			r.rotate()
+			r.rotate(sigCh)
 		}
 	}
 }
 
-func (r *Runner) rotate() {
+func (r *Runner) rotate(sigCh chan os.Signal) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go pollCtx(ctx, sigCh, cancel, 100*time.Millisecond)
+
 	failed := 0
+	failedCycles := 0
+	count := r.p.UsableCount()
 
-	var start *peer.Peer
 	for {
-		next := r.s.Next(r.p)
-		if start == next {
-			// increasingly back off to a max of an hour every time we complete a full cycle of the pool
-			failed++
-			t := min(time.Hour, 5*time.Duration(failed)*time.Minute)
-			sink.Printf(sink.ERROR, "failed through pool, sleeping for %s\n", t.String())
-			time.Sleep(t)
-		}
+		select {
+		case <-ctx.Done():
+			sink.Println(sink.TRACE, "interupt detected, early out")
+			return
+		default:
+			if failed >= count {
+				failed = 0
+				failedCycles++
+				t := min(time.Hour, 5*time.Duration(failedCycles)*time.Minute)
+				sink.Printf(sink.ERROR, "failed through pool, sleeping for %s\n", t.String())
+				err := sleepWithContext(ctx, t)
+				if err != nil {
+					return
+				}
 
-		// populate start
-		if start == nil {
-			start = next
-		}
+			}
 
-		sink.Printf(sink.INFO, "rotating to %s\n", next.Name)
-		if err := r.rotateTo(next); err != nil {
-			sink.Printf(sink.ERROR, "rotation to %s failed: %v\n", next.Name, err)
-			time.Sleep(5 * time.Second)
-			continue
-		}
+			next := r.s.Next(r.p)
+			sink.Printf(sink.INFO, "rotating to %s\n", next.Name)
+			if err := r.rotateTo(next); err != nil {
+				sink.Printf(sink.ERROR, "rotation to %s failed: %v\n", next.Name, err)
+				err = sleepWithContext(ctx, 5*time.Second)
+				if err != nil {
+					return
+				}
 
-		sink.Printf(sink.INFO, "rotation to %s complete\n", next.Name)
-		break
+				failed++
+				continue
+			}
+
+			sink.Printf(sink.INFO, "rotation to %s complete\n", next.Name)
+			r.s.Save()
+			return
+		}
 	}
-
-	r.s.Save()
 }
 
 func (r *Runner) rotateTo(peer *peer.Peer) error {

@@ -74,6 +74,22 @@ func (p *Pool) Count() int {
 	return len(p.peers)
 }
 
+func (p *Pool) UsableCount() int {
+	p.mx.Lock()
+	defer p.mx.Unlock()
+
+	count := 0
+	for _, peer := range p.peers {
+		if ok, err := peer.TryLock(); ok && err != nil {
+			count++
+		}
+
+		peer.Unlock()
+	}
+
+	return count
+}
+
 func (p *Pool) At(idx int) *peer.Peer {
 	p.mx.Lock()
 	defer p.mx.Unlock()
