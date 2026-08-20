@@ -2,11 +2,13 @@ package pool
 
 import (
 	"fmt"
+	"math/rand/v2"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
+	"time"
 	"wgrot/v2/internal/peer"
 )
 
@@ -78,9 +80,15 @@ func (p *Pool) UsableCount() int {
 	p.mx.Lock()
 	defer p.mx.Unlock()
 
+	// ensure we're offset from other wgrots
+	min := 10
+	max := 150
+	rn := rand.IntN(max-min+1) + min
+	time.Sleep(time.Duration(rn) * time.Millisecond)
+
 	count := 0
 	for _, peer := range p.peers {
-		if ok, err := peer.TryLock(); ok && err != nil {
+		if ok, err := peer.TryLock(); ok && err == nil {
 			count++
 		}
 

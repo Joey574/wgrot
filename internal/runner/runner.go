@@ -47,9 +47,9 @@ func (r *Runner) Start(skipRefresh bool) {
 	start := r.s.Next(r.p)
 	sink.Printf(sink.DEBUG, "applying startup config: %s\n", start.Name)
 	if err := r.rotateTo(start); err != nil {
-		sink.Printf(sink.ERROR, "%s failed to come up: %v", start.Name, err)
+		sink.Printf(sink.ERROR, "%s failed to come up: %v\n", start.Name, err)
 	} else {
-		sink.Printf(sink.DEBUG, "startup config %s online", start.Name)
+		sink.Printf(sink.DEBUG, "startup config %s online\n", start.Name)
 	}
 
 	var refresh <-chan time.Time
@@ -93,7 +93,7 @@ func (r *Runner) rotate(sigCh chan os.Signal) {
 
 	failed := 0
 	failedCycles := 0
-	count := r.p.UsableCount()
+	count := max(r.p.UsableCount(), 1)
 
 	for {
 		select {
@@ -110,7 +110,6 @@ func (r *Runner) rotate(sigCh chan os.Signal) {
 				if err != nil {
 					return
 				}
-
 			}
 
 			next := r.s.Next(r.p)

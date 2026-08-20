@@ -22,7 +22,7 @@ func main() {
 	skipRefresh := flag.Bool("skip-refresh", false, "skip rotating on interval")
 	flag.Parse()
 
-	sink.SetLogLevel(sink.TRACE)
+	sink.SetLogLevel(sink.DEBUG)
 	sink.PushSinks(os.Stdout)
 	sink.SetFormat("[\\t] *")
 
