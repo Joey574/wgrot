@@ -45,7 +45,6 @@ func (p *Pool) Load() error {
 			return err
 		}
 
-		peer.Name = n
 		configs = append(configs, peer)
 	}
 	if len(configs) == 0 {
