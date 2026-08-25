@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/gofrs/flock"
@@ -47,6 +48,7 @@ func (p *Peer) Load(path string) error {
 	defer f.Close()
 
 	p.Path = path
+	p.Name = filepath.Base(p.Path)
 	p.lockPath = path + ".lock"
 	p.lock = flock.New(p.lockPath)
 
