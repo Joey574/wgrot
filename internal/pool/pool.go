@@ -88,6 +88,12 @@ func (p *Pool) UsableCount() int {
 
 	count := 0
 	for _, peer := range p.peers {
+		if peer.IsLocked() {
+			// we've already locked this peer, don't unlock it
+			count++
+			continue
+		}
+
 		if ok, err := peer.TryLock(); ok {
 			peer.Unlock()
 
