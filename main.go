@@ -15,7 +15,7 @@ import (
 func main() {
 	iface := flag.String("iface", "", "wireguard interface name")
 	poolDir := flag.String("pool", "/etc/wgrot-pool", "directory of wireguard config pool")
-	statePath := flag.String("state", "", "state file path")
+	workDir := flag.String("workDir", "/etc/wgrot-pool", "work directory for handling cross-instance coordination")
 	refresh := flag.Duration("refresh", 3*time.Hour, "rotation interval")
 	verify := flag.Duration("verify", 30*time.Second, "verify interval")
 	timeout := flag.Duration("timeout", 15*time.Second, "handshake timeout")
@@ -37,8 +37,7 @@ func main() {
 	}
 	sink.Printf(sink.INFO, "monitoring %s for new configs\n", *poolDir)
 
-	state := state.NewState(*statePath)
-	state.Load(pool)
+	state := state.NewState(*workDir)
 
 	runner := runner.NewRunner(state, pool, *iface, *refresh, *verify, *timeout)
 	runner.Start(*skipRefresh)

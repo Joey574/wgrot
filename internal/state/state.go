@@ -1,60 +1,61 @@
 package state
 
 import (
-	"encoding/json"
+	"context"
+	"fmt"
+	"math/rand"
 	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
 	"time"
 	"wgrot/v2/internal/peer"
 	"wgrot/v2/internal/pool"
 	"wgrot/v2/internal/sink"
+
+	"github.com/gofrs/flock"
+)
+
+const (
+	spacing = 20 * time.Second
+	jitter  = 10 * time.Second
 )
 
 type State struct {
-	LastGood int `json:"lastGood"`
+	workDir  string
+	lockPath string
+	timePath string
 
-	savePath string     `json:"-"`
-	lastPeer *peer.Peer `json:"-"`
+	lastIdx  int
+	lastPeer *peer.Peer
+
+	lock *flock.Flock
 }
 
-func NewState(path string) *State {
+func NewState(workDir string) *State {
+	lockf := filepath.Join(workDir, "instances.lock")
+	timef := filepath.Join(workDir, "instances.time")
+
 	return &State{
-		savePath: path,
+		workDir:  workDir,
+		lockPath: lockf,
+		timePath: timef,
+
+		lock: flock.New(lockf),
 	}
 }
 
-func (s *State) Load(pool *pool.Pool) {
-	data, err := os.ReadFile(s.savePath)
-	if err != nil {
-		return
+func (s *State) Next(ctx context.Context, pool *pool.Pool) *peer.Peer {
+	if pool.Count() == 0 {
+		sink.Println(sink.WARN, "no availible peers in pool")
+		return nil
 	}
 
-	_ = json.Unmarshal(data, s)
-
-	if s.LastGood < 0 || s.LastGood >= pool.Count() {
-		s.LastGood = 0
-	}
-}
-
-func (s *State) Save() {
-	data, err := json.MarshalIndent(s, "", "  ")
-	if err != nil {
-		sink.Printf(sink.ERROR, "marshal state: %v\n", err)
-		return
-	}
-
-	if err := os.WriteFile(s.savePath, data, 0o600); err != nil {
-		sink.Printf(sink.ERROR, "write state: %v\n", err)
-	}
-}
-
-func (s *State) Next(pool *pool.Pool) *peer.Peer {
-	if s.LastGood < 0 || s.LastGood >= pool.Count() {
-		s.LastGood = 0
-	}
-
+	s.lastIdx = min(max(s.lastIdx, 0), pool.Count())
 	for {
-		s.LastGood = (s.LastGood + 1) % pool.Count()
-		p := pool.At(s.LastGood)
+
+		s.lastIdx = (s.lastIdx + 1) % pool.Count()
+		p := pool.At(s.lastIdx)
 		ok, err := p.TryLock()
 		if ok && err == nil {
 			if s.lastPeer != nil {
@@ -75,6 +76,56 @@ func (s *State) Next(pool *pool.Pool) *peer.Peer {
 			sink.Printf(sink.DEBUG, "peer already in use: '%s'\n", p.Name)
 		}
 
-		time.Sleep(1 * time.Second)
+		if err := sleepWithContext(ctx, time.Second); err != nil {
+			return nil
+		}
 	}
+}
+
+func (s *State) WaitForConnection(ctx context.Context) error {
+	ok, err := s.lock.TryLockContext(ctx, 100*time.Millisecond)
+	if err != nil {
+		return fmt.Errorf("instance lock: %w", err)
+	}
+
+	if !ok {
+		return fmt.Errorf("interrupt triggered")
+	}
+	defer s.lock.Unlock()
+
+	f, err := os.OpenFile(s.timePath, os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		return fmt.Errorf("opening fleet timestamp file: %w", err)
+	}
+	defer f.Close()
+
+	var last int64
+	buf := make([]byte, 32)
+	n, _ := f.ReadAt(buf, 0)
+	if n > 0 {
+		last, _ = strconv.ParseInt(strings.TrimSpace(string(buf[:n])), 10, 64)
+	}
+
+	if elapsed := time.Since(time.Unix(last, 0)); elapsed < spacing {
+		wait := spacing - elapsed
+		if jitter > 0 {
+			wait += time.Duration(rand.Int63n(int64(jitter)))
+		}
+
+		sink.Printf(sink.DEBUG, "recent fleet rotation: waiting %s before next attempt\n", wait.String())
+		if err := sleepWithContext(ctx, wait); err != nil {
+			return err
+		}
+	}
+
+	now := time.Now().Unix()
+	if err := f.Truncate(0); err != nil {
+		return fmt.Errorf("truncating fleet lock: %w", err)
+	}
+
+	if _, err := f.WriteAt([]byte(strconv.FormatInt(now, 10)), 0); err != nil {
+		return fmt.Errorf("writing fleet lock: %w", err)
+	}
+
+	return nil
 }

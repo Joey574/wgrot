@@ -16,16 +16,26 @@ import (
 	"wgrot/v2/internal/state"
 )
 
-const rekeyWindow = int64(3 * 60)
+const (
+	rekeyWindow = int64(3 * 60) // 3 minutes
+
+	minTimeBetweenSamePeer = time.Hour
+	minTimeBetweenRotation = 15 * time.Minute
+	baseBackoff            = 5 * time.Second
+	maxBackoff             = 5 * time.Minute
+)
 
 type Runner struct {
-	s       *state.State
-	p       *pool.Pool
-	m       *monitor
-	iface   string
+	s     *state.State
+	p     *pool.Pool
+	m     *monitor
+	iface string
+
 	refresh time.Duration
 	verify  time.Duration
 	timeout time.Duration
+
+	lastConnection time.Time
 }
 
 func NewRunner(state *state.State, pool *pool.Pool, iface string, refresh, verify, timeout time.Duration) *Runner {
@@ -41,16 +51,12 @@ func NewRunner(state *state.State, pool *pool.Pool, iface string, refresh, verif
 }
 
 func (r *Runner) Start(skipRefresh bool) {
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP)
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
+	defer stop()
 
-	start := r.s.Next(r.p)
-	sink.Printf(sink.DEBUG, "applying startup config: %s\n", start.Name)
-	if err := r.rotateTo(start); err != nil {
-		sink.Printf(sink.ERROR, "%s failed to come up: %v\n", start.Name, err)
-	} else {
-		sink.Printf(sink.DEBUG, "startup config %s online\n", start.Name)
-	}
+	hupCh := make(chan os.Signal, 1)
+	signal.Notify(hupCh, syscall.SIGHUP)
+	defer signal.Stop(hupCh)
 
 	var refresh <-chan time.Time
 	if !skipRefresh {
@@ -64,33 +70,27 @@ func (r *Runner) Start(skipRefresh bool) {
 
 	for {
 		select {
-		case sig := <-sigCh:
-			if sig == syscall.SIGHUP {
-				sink.Println(sink.DEBUG, "SIGHUP recieved")
-				r.rotate(sigCh)
-				continue
-			}
+		case <-ctx.Done():
 			sink.Println(sink.INFO, "shutting down")
 			return
+		case <-hupCh:
+			sink.Println(sink.DEBUG, "SIGHUP recieved")
+			r.rotate(ctx)
+			continue
 		case <-refresh:
-			r.rotate(sigCh)
+			r.rotate(ctx)
 		case <-verify.C:
 			if r.m.IsConnected() {
 				continue
 			}
 
 			sink.Println(sink.ERROR, "network down")
-			r.rotate(sigCh)
+			r.rotate(ctx)
 		}
 	}
 }
 
-func (r *Runner) rotate(sigCh chan os.Signal) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	go pollCtx(ctx, sigCh, cancel, 100*time.Millisecond)
-
+func (r *Runner) rotate(ctx context.Context) {
 	failed := 0
 	failedCycles := 0
 	count := max(r.p.UsableCount(), 1)
@@ -112,12 +112,44 @@ func (r *Runner) rotate(sigCh chan os.Signal) {
 				}
 			}
 
-			next := r.s.Next(r.p)
+			next := r.s.Next(ctx, r.p)
+			if next == nil {
+				return
+			}
+
+			// check connection time
+			if time.Since(next.LastConnection()) <= minTimeBetweenSamePeer {
+				next.Unlock()
+				if err := sleepWithContext(ctx, jittered(baseBackoff)); err != nil {
+					return
+				}
+
+				failed++
+				continue
+			}
+
+			if time.Since(r.lastConnection) <= minTimeBetweenRotation {
+				wait := time.Until(r.lastConnection.Add(time.Duration(minTimeBetweenRotation)))
+				if err := sleepWithContext(ctx, wait); err != nil {
+					next.Unlock()
+					return
+				}
+			}
+
+			if err := r.s.WaitForConnection(ctx); err != nil {
+				next.Unlock()
+				return
+			}
+
 			sink.Printf(sink.INFO, "rotating to %s\n", next.Name)
 			if err := r.rotateTo(next); err != nil {
 				sink.Printf(sink.ERROR, "rotation to %s failed: %v\n", next.Name, err)
-				err = sleepWithContext(ctx, 5*time.Second)
-				if err != nil {
+
+				next.Unlock()
+				shift := min(failed, 5)
+				backoff := jittered(min(maxBackoff, baseBackoff*time.Duration(int64(1)<<uint(shift))))
+
+				if err := sleepWithContext(ctx, backoff); err != nil {
 					return
 				}
 
@@ -126,7 +158,8 @@ func (r *Runner) rotate(sigCh chan os.Signal) {
 			}
 
 			sink.Printf(sink.INFO, "rotation to %s complete\n", next.Name)
-			r.s.Save()
+			next.UpdateLastConnection()
+			r.lastConnection = time.Now()
 			return
 		}
 	}

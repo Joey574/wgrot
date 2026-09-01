@@ -2,7 +2,6 @@ package pool
 
 import (
 	"fmt"
-	"math/rand/v2"
 	"os"
 	"path/filepath"
 	"slices"
@@ -27,7 +26,7 @@ func NewPool(dir string) *Pool {
 func (p *Pool) Load() error {
 	entries, err := os.ReadDir(p.Dir)
 	if err != nil {
-		return nil
+		return err
 	}
 
 	var names []string
@@ -79,12 +78,6 @@ func (p *Pool) UsableCount() int {
 	p.mx.Lock()
 	defer p.mx.Unlock()
 
-	// ensure we're offset from other wgrots
-	min := 10
-	max := 150
-	rn := rand.IntN(max-min+1) + min
-	time.Sleep(time.Duration(rn) * time.Millisecond)
-
 	count := 0
 	for _, peer := range p.peers {
 		if peer.IsLocked() {
@@ -116,6 +109,9 @@ func (p *Pool) At(idx int) *peer.Peer {
 }
 
 func (p *Pool) Remove(path string) {
+	p.mx.Lock()
+	defer p.mx.Unlock()
+
 	for i, peer := range p.peers {
 		if peer.Path == path {
 			// if peer is in use by us, we'll sleep until we give it up

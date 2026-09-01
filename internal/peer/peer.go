@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/gofrs/flock"
 )
@@ -21,6 +22,8 @@ type Peer struct {
 	Keepalive  string
 	DNS        string
 	Config     string
+
+	lastConnection time.Time
 
 	lock     *flock.Flock
 	lockPath string
@@ -38,6 +41,14 @@ func (p *Peer) IsValid() bool {
 		p.AllowedIPs != "" &&
 		p.Keepalive != "" &&
 		p.DNS != ""
+}
+
+func (p *Peer) UpdateLastConnection() {
+	p.lastConnection = time.Now()
+}
+
+func (p *Peer) LastConnection() time.Time {
+	return p.lastConnection
 }
 
 func (p *Peer) Load(path string) error {
@@ -113,7 +124,6 @@ func (p *Peer) TryLock() (bool, error) {
 }
 
 func (p *Peer) Unlock() error {
-	defer os.Remove(p.lockPath)
 	if p.lock == nil {
 		return nil
 	}

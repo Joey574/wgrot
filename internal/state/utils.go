@@ -1,19 +1,10 @@
-package runner
+package state
 
 import (
 	"context"
 	"fmt"
-	"math/rand"
 	"time"
 )
-
-func jittered(d time.Duration) time.Duration {
-	if d <= 0 {
-		return 0
-	}
-
-	return d + time.Duration(rand.Int63n(int64(d)/2+1))
-}
 
 func sleepWithContext(ctx context.Context, t time.Duration) error {
 	select {
