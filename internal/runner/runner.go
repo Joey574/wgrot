@@ -111,8 +111,7 @@ func (r *Runner) Start(skipRefresh bool) {
 			return
 
 		case err := <-portFailure:
-			sink.Printf(sink.ERROR, "port forwarding failure, rotating now: %v\n", err)
-			r.rotate(ctx)
+			sink.Printf(sink.ERROR, "natpmpc error: %v\n", err)
 
 		case <-refresh:
 			r.rotate(ctx)

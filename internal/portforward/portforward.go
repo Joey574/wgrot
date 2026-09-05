@@ -17,7 +17,7 @@ import (
 const (
 	DefaultGateway  = "10.2.0.1"
 	MappingLifetime = 60 * time.Second
-	RenewInterval   = 45 * time.Second
+	RenewInterval   = 30 * time.Second
 )
 
 var publicPortRE = regexp.MustCompile(`(?i)public port\s+([0-9]+)`)
@@ -168,7 +168,7 @@ func (f *Forwarder) mapPort(ctx context.Context, protocol string) (int, error) {
 
 	matches := publicPortRE.FindStringSubmatch(output)
 	if len(matches) != 2 {
-		return 0, fmt.Errorf("could not find public port in natpmpmc output: %s", strings.TrimSpace(output))
+		return 0, fmt.Errorf("could not find public port in natpmpc output: %s", strings.TrimSpace(output))
 	}
 
 	port, err := strconv.Atoi(matches[1])
@@ -224,6 +224,8 @@ func (f *Forwarder) Renew(ctx context.Context) error {
 
 				return err
 			}
+
+			ticker.Reset(RenewInterval)
 		}
 	}
 }
