@@ -2,7 +2,6 @@ package runner
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -306,6 +305,9 @@ func (r *Runner) startPortForward() error {
 		r.forwardCancel = nil
 	}
 
+	r.forwarder.Wait()
+	r.forwarder.Clear()
+
 	ctx, cancel := context.WithCancel(context.Background())
 
 	if _, err := r.forwarder.Acquire(ctx); err != nil {
@@ -317,17 +319,7 @@ func (r *Runner) startPortForward() error {
 	r.forwardCtx = ctx
 	r.forwardCancel = cancel
 
-	go func() {
-		err := r.forwarder.Renew(ctx)
-
-		if err != nil &&
-			!errors.Is(err, context.Canceled) &&
-			!errors.Is(err, context.DeadlineExceeded) {
-
-			sink.Printf(sink.ERROR, "port forwarding fialed: %v\n", err)
-		}
-	}()
-
+	go r.forwarder.StartRenew(ctx)
 	return nil
 }
 

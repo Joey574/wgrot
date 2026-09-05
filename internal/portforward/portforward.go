@@ -10,7 +10,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-	"wgrot/v2/internal/sink"
 )
 
 const (
@@ -31,6 +30,7 @@ type Forwarder struct {
 	failure chan struct{}
 
 	mu sync.RWMutex
+	wg sync.WaitGroup
 }
 
 func New(gateway, path string) *Forwarder {
@@ -146,7 +146,7 @@ func (f *Forwarder) mapPort(ctx context.Context, protocol string) (int, error) {
 	defer cancel()
 
 	cmd := exec.CommandContext(cmdCtx,
-		"natpmc",
+		"natpmpc",
 		"-a", "1", "0",
 		protocol,
 		strconv.Itoa(int(MappingLifetime/time.Second)),
@@ -176,42 +176,12 @@ func (f *Forwarder) mapPort(ctx context.Context, protocol string) (int, error) {
 	return port, nil
 }
 
-func (f *Forwarder) Run(ctx context.Context) error {
-	_, err := f.Acquire(ctx)
-	if err != nil {
-		f.Clear()
-		return err
-	}
+func (f *Forwarder) StartRenew(ctx context.Context) {
+	f.wg.Go(func() { f.Renew(ctx) })
+}
 
-	ticker := time.NewTicker(RenewInterval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			f.Clear()
-			return ctx.Err()
-
-		case <-ticker.C:
-			port, err := f.Acquire(ctx)
-			if err != nil {
-				f.mu.Lock()
-				f.failed = true
-				f.mu.Unlock()
-
-				f.Clear()
-
-				select {
-				case f.failure <- struct{}{}:
-				default:
-				}
-
-				return err
-			}
-
-			sink.Printf(sink.INFO, "port forwarding active on port %d\n", port)
-		}
-	}
+func (f *Forwarder) Wait() {
+	f.wg.Wait()
 }
 
 func (f *Forwarder) Renew(ctx context.Context) error {
