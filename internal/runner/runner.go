@@ -2,6 +2,7 @@ package runner
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -12,6 +13,7 @@ import (
 	"time"
 	"wgrot/v2/internal/peer"
 	"wgrot/v2/internal/pool"
+	"wgrot/v2/internal/portforward"
 	"wgrot/v2/internal/sink"
 	"wgrot/v2/internal/state"
 )
@@ -26,9 +28,10 @@ const (
 )
 
 type Runner struct {
-	s     *state.State
-	p     *pool.Pool
-	m     *monitor
+	s *state.State
+	p *pool.Pool
+	m *monitor
+
 	iface string
 
 	refresh time.Duration
@@ -36,27 +39,53 @@ type Runner struct {
 	timeout time.Duration
 
 	lastConnection time.Time
+
+	portForward   bool
+	publishPath   string
+	forwarder     *portforward.Forwarder
+	forwardCtx    context.Context
+	forwardCancel context.CancelFunc
 }
 
-func NewRunner(state *state.State, pool *pool.Pool, iface string, refresh, verify, timeout time.Duration) *Runner {
+func NewRunner(
+	state *state.State,
+	pool *pool.Pool,
+	iface string,
+	refresh,
+	verify,
+	timeout time.Duration,
+	portForward bool,
+	publishPath string,
+) *Runner {
+	var forwarder *portforward.Forwarder
+
+	if portForward {
+		forwarder = portforward.New(
+			portforward.DefaultGateway,
+			publishPath,
+		)
+	}
+
 	return &Runner{
-		s:       state,
-		p:       pool,
-		m:       newMonitor(verify),
-		iface:   iface,
+		s: state,
+		p: pool,
+		m: newMonitor(verify),
+
+		iface: iface,
+
 		refresh: refresh,
 		verify:  verify,
 		timeout: timeout,
+
+		portForward: portForward,
+		publishPath: publishPath,
+		forwarder:   forwarder,
 	}
 }
 
 func (r *Runner) Start(skipRefresh bool) {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
-
-	hupCh := make(chan os.Signal, 1)
-	signal.Notify(hupCh, syscall.SIGHUP)
-	defer signal.Stop(hupCh)
 
 	var refresh <-chan time.Time
 	if !skipRefresh {
@@ -68,15 +97,19 @@ func (r *Runner) Start(skipRefresh bool) {
 	verify := time.NewTicker(r.verify)
 	defer verify.Stop()
 
+	var portFailure <-chan struct{}
+	if r.forwarder != nil {
+		portFailure = r.forwarder.Failure()
+	}
+
 	for {
 		select {
 		case <-ctx.Done():
 			sink.Println(sink.INFO, "shutting down")
 			return
-		case <-hupCh:
-			sink.Println(sink.DEBUG, "SIGHUP recieved")
+		case <-portFailure:
+			sink.Println(sink.ERROR, "port forwarding failure rotating now")
 			r.rotate(ctx)
-			continue
 		case <-refresh:
 			r.rotate(ctx)
 		case <-verify.C:
@@ -167,6 +200,16 @@ func (r *Runner) rotate(ctx context.Context) {
 
 func (r *Runner) rotateTo(peer *peer.Peer) error {
 	start := time.Now().Unix()
+
+	if r.forwardCancel != nil {
+		r.forwardCancel()
+		r.forwardCancel = nil
+	}
+
+	if r.forwarder != nil {
+		r.forwarder.Clear()
+	}
+
 	f, err := os.CreateTemp("", "wg-conf-*")
 	if err != nil {
 		return fmt.Errorf("creating tmp key file: %w", err)
@@ -219,7 +262,17 @@ func (r *Runner) rotateTo(peer *peer.Peer) error {
 		return fmt.Errorf("ip route replace: %w: %s", err, string(out))
 	}
 
-	return r.waitForHandshake(peer.PublicKey, start)
+	if err := r.waitForHandshake(peer.PublicKey, start); err != nil {
+		return err
+	}
+
+	if r.portForward {
+		if err := r.startPortForward(); err != nil {
+			return fmt.Errorf("forwarding port: %w", err)
+		}
+	}
+
+	return nil
 }
 
 func currentAddrs(iface string) ([]string, error) {
@@ -241,6 +294,41 @@ func currentAddrs(iface string) ([]string, error) {
 		}
 	}
 	return addrs, nil
+}
+
+func (r *Runner) startPortForward() error {
+	if r.forwarder == nil {
+		return nil
+	}
+
+	if r.forwardCancel != nil {
+		r.forwardCancel()
+		r.forwardCancel = nil
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	if _, err := r.forwarder.Acquire(ctx); err != nil {
+		cancel()
+		r.forwarder.Clear()
+		return err
+	}
+
+	r.forwardCtx = ctx
+	r.forwardCancel = cancel
+
+	go func() {
+		err := r.forwarder.Renew(ctx)
+
+		if err != nil &&
+			!errors.Is(err, context.Canceled) &&
+			!errors.Is(err, context.DeadlineExceeded) {
+
+			sink.Printf(sink.ERROR, "port forwarding fialed: %v\n", err)
+		}
+	}()
+
+	return nil
 }
 
 func (r *Runner) waitForHandshake(pubKey string, start int64) error {

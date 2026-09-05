@@ -13,13 +13,60 @@ import (
 )
 
 func main() {
-	iface := flag.String("iface", "", "wireguard interface name")
-	poolDir := flag.String("pool", "/etc/wgrot-pool", "directory of wireguard config pool")
-	workDir := flag.String("workDir", "/etc/wgrot-pool", "work directory for handling cross-instance coordination")
-	refresh := flag.Duration("refresh", 3*time.Hour, "rotation interval")
-	verify := flag.Duration("verify", 30*time.Second, "verify interval")
-	timeout := flag.Duration("timeout", 15*time.Second, "handshake timeout")
-	skipRefresh := flag.Bool("skip-refresh", false, "skip rotating on interval")
+	iface := flag.String(
+		"iface",
+		"",
+		"wireguard interface name",
+	)
+
+	poolDir := flag.String(
+		"pool",
+		"/etc/wgrot-pool",
+		"directory of wireguard config pool",
+	)
+
+	workDir := flag.String(
+		"workDir",
+		"/etc/wgrot-pool",
+		"work directory for handling cross-instance coordination",
+	)
+
+	refresh := flag.Duration(
+		"refresh",
+		3*time.Hour,
+		"rotation interval",
+	)
+
+	verify := flag.Duration(
+		"verify",
+		30*time.Second,
+		"verify interval",
+	)
+
+	timeout := flag.Duration(
+		"timeout",
+		15*time.Second,
+		"handshake timeout",
+	)
+
+	skipRefresh := flag.Bool(
+		"skip-refresh",
+		false,
+		"skip rotating on interval",
+	)
+
+	portForward := flag.Bool(
+		"port-forward",
+		false,
+		"enable Proton NAT-PMP port forwarding",
+	)
+
+	publishPort := flag.String(
+		"publish-port",
+		"",
+		"publish the current forwarded port to the provided file",
+	)
+
 	flag.Parse()
 
 	sink.SetLogLevel(sink.DEBUG)
@@ -39,6 +86,16 @@ func main() {
 
 	state := state.NewState(*workDir)
 
-	runner := runner.NewRunner(state, pool, *iface, *refresh, *verify, *timeout)
+	runner := runner.NewRunner(
+		state,
+		pool,
+		*iface,
+		*refresh,
+		*verify,
+		*timeout,
+		*portForward,
+		*publishPort,
+	)
+
 	runner.Start(*skipRefresh)
 }
