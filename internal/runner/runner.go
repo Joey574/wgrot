@@ -101,6 +101,9 @@ func (r *Runner) Start(skipRefresh bool) {
 		portFailure = r.forwarder.Failure()
 	}
 
+	// initial startup
+	r.rotate(ctx)
+
 	for {
 		select {
 		case <-ctx.Done():
