@@ -2,6 +2,7 @@ package portforward
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -10,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"wgrot/v2/internal/sink"
 )
 
 const (
@@ -51,6 +53,8 @@ func (f *Forwarder) Port() int {
 }
 
 func (f *Forwarder) Publish(port int) error {
+	sink.Println(sink.TRACE, "forwarder: publish")
+
 	if f.path == "" {
 		return nil
 	}
@@ -91,6 +95,8 @@ func (f *Forwarder) Publish(port int) error {
 }
 
 func (f *Forwarder) Clear() {
+	sink.Println(sink.TRACE, "forwarder: clear")
+
 	if f.path == "" {
 		return
 	}
@@ -114,6 +120,8 @@ func (f *Forwarder) Clear() {
 }
 
 func (f *Forwarder) Acquire(ctx context.Context) (int, error) {
+	sink.Println(sink.TRACE, "forwarder: acquire")
+
 	udpPort, err := f.mapPort(ctx, "udp")
 	if err != nil {
 		return 0, fmt.Errorf("UDP NAT-PMP: %w", err)
@@ -141,6 +149,8 @@ func (f *Forwarder) Acquire(ctx context.Context) (int, error) {
 }
 
 func (f *Forwarder) mapPort(ctx context.Context, protocol string) (int, error) {
+	sink.Println(sink.TRACE, "forwarder: map port")
+
 	cmd := exec.CommandContext(
 		ctx,
 		"natpmpc",
@@ -158,7 +168,7 @@ func (f *Forwarder) mapPort(ctx context.Context, protocol string) (int, error) {
 
 	matches := publicPortRE.FindStringSubmatch(output)
 	if len(matches) != 2 {
-		return 0, fmt.Errorf("could not find public port in natpmpc output: %s", strings.TrimSpace(output))
+		return 0, fmt.Errorf("could not find public port in natpmpmc output: %s", strings.TrimSpace(output))
 	}
 
 	port, err := strconv.Atoi(matches[1])
@@ -174,14 +184,26 @@ func (f *Forwarder) mapPort(ctx context.Context, protocol string) (int, error) {
 }
 
 func (f *Forwarder) StartRenew(ctx context.Context) {
-	f.wg.Go(func() { f.Renew(ctx) })
+	sink.Println(sink.TRACE, "forwarder: starting renew cycle")
+
+	f.wg.Go(func() {
+		if err := f.Renew(ctx); err != nil && !errors.Is(err, context.Canceled) {
+			select {
+			case f.failure <- err:
+			default:
+			}
+		}
+	})
 }
 
 func (f *Forwarder) Wait() {
+	sink.Println(sink.TRACE, "forwarder: waiting")
 	f.wg.Wait()
 }
 
 func (f *Forwarder) Renew(ctx context.Context) error {
+	sink.Println(sink.TRACE, "forwarder: starting renew")
+
 	ticker := time.NewTicker(RenewInterval)
 	defer ticker.Stop()
 

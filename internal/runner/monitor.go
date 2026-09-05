@@ -1,6 +1,7 @@
 package runner
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -55,9 +56,15 @@ func newMonitor(interval time.Duration) *monitor {
 	}
 }
 
-func (m *monitor) IsConnected() bool {
+func (m *monitor) IsConnected(ctx context.Context) bool {
 	for _, req := range m.requests {
-		resp, err := m.client.Do(req)
+		if err := ctx.Err(); err != nil {
+			sink.Printf(sink.ERROR, "context canceled: %v\n", err)
+			return false
+		}
+
+		reqWithCtx := req.WithContext(ctx)
+		resp, err := m.client.Do(reqWithCtx)
 		if err != nil {
 			sink.Printf(sink.TRACE, "%v\n", err)
 			continue

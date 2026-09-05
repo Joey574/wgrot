@@ -118,7 +118,7 @@ func (r *Runner) Start(skipRefresh bool) {
 			r.rotate(ctx)
 
 		case <-verify.C:
-			if r.m.IsConnected() {
+			if r.m.IsConnected(ctx) {
 				continue
 			}
 
@@ -224,6 +224,7 @@ func (r *Runner) rotateTo(peer *peer.Peer) error {
 		return fmt.Errorf("creating tmp key file: %w", err)
 	}
 	defer os.Remove(f.Name())
+
 	if err := f.Chmod(0o600); err != nil {
 		f.Close()
 		return err
