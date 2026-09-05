@@ -149,6 +149,7 @@ func (r *Runner) rotate(ctx context.Context) {
 
 			next := r.s.Next(ctx, r.p)
 			if next == nil {
+				sink.Println(sink.WARN, "no valid peers in pool")
 				return
 			}
 
@@ -156,6 +157,7 @@ func (r *Runner) rotate(ctx context.Context) {
 			if time.Since(next.LastConnection()) <= minTimeBetweenSamePeer {
 				next.Unlock()
 				if err := sleepWithContext(ctx, jittered(baseBackoff)); err != nil {
+					sink.Printf(sink.ERROR, "%v\n", err)
 					return
 				}
 
@@ -166,12 +168,14 @@ func (r *Runner) rotate(ctx context.Context) {
 			if time.Since(r.lastConnection) <= minTimeBetweenRotation {
 				wait := time.Until(r.lastConnection.Add(time.Duration(minTimeBetweenRotation)))
 				if err := sleepWithContext(ctx, wait); err != nil {
+					sink.Printf(sink.ERROR, "%v\n", err)
 					next.Unlock()
 					return
 				}
 			}
 
 			if err := r.s.WaitForConnection(ctx); err != nil {
+				sink.Printf(sink.ERROR, "%v\n", err)
 				next.Unlock()
 				return
 			}
