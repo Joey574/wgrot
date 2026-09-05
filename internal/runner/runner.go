@@ -96,7 +96,7 @@ func (r *Runner) Start(skipRefresh bool) {
 	verify := time.NewTicker(r.verify)
 	defer verify.Stop()
 
-	var portFailure <-chan struct{}
+	var portFailure <-chan error
 	if r.forwarder != nil {
 		portFailure = r.forwarder.Failure()
 	}
@@ -109,11 +109,14 @@ func (r *Runner) Start(skipRefresh bool) {
 		case <-ctx.Done():
 			sink.Println(sink.INFO, "shutting down")
 			return
-		case <-portFailure:
-			sink.Println(sink.ERROR, "port forwarding failure rotating now")
+
+		case err := <-portFailure:
+			sink.Printf(sink.ERROR, "port forwarding failure, rotating now: %v\n", err)
 			r.rotate(ctx)
+
 		case <-refresh:
 			r.rotate(ctx)
+
 		case <-verify.C:
 			if r.m.IsConnected() {
 				continue

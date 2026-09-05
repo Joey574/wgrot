@@ -16,7 +16,6 @@ const (
 	DefaultGateway  = "10.2.0.1"
 	MappingLifetime = 60 * time.Second
 	RenewInterval   = 45 * time.Second
-	CommandTimeout  = 20 * time.Second
 )
 
 var publicPortRE = regexp.MustCompile(`(?i)public port\s+([0-9]+)`)
@@ -27,7 +26,7 @@ type Forwarder struct {
 
 	port    int
 	failed  bool
-	failure chan struct{}
+	failure chan error
 
 	mu sync.RWMutex
 	wg sync.WaitGroup
@@ -37,11 +36,11 @@ func New(gateway, path string) *Forwarder {
 	return &Forwarder{
 		gateway: gateway,
 		path:    path,
-		failure: make(chan struct{}, 1),
+		failure: make(chan error, 1),
 	}
 }
 
-func (f *Forwarder) Failure() <-chan struct{} {
+func (f *Forwarder) Failure() <-chan error {
 	return f.failure
 }
 
@@ -142,10 +141,8 @@ func (f *Forwarder) Acquire(ctx context.Context) (int, error) {
 }
 
 func (f *Forwarder) mapPort(ctx context.Context, protocol string) (int, error) {
-	cmdCtx, cancel := context.WithTimeout(ctx, CommandTimeout)
-	defer cancel()
-
-	cmd := exec.CommandContext(cmdCtx,
+	cmd := exec.CommandContext(
+		ctx,
 		"natpmpc",
 		"-a", "1", "0",
 		protocol,
@@ -161,7 +158,7 @@ func (f *Forwarder) mapPort(ctx context.Context, protocol string) (int, error) {
 
 	matches := publicPortRE.FindStringSubmatch(output)
 	if len(matches) != 2 {
-		return 0, fmt.Errorf("could not find public port in natpmc output: %s", strings.TrimSpace(output))
+		return 0, fmt.Errorf("could not find public port in natpmpc output: %s", strings.TrimSpace(output))
 	}
 
 	port, err := strconv.Atoi(matches[1])
@@ -193,12 +190,13 @@ func (f *Forwarder) Renew(ctx context.Context) error {
 		case <-ctx.Done():
 			f.Clear()
 			return ctx.Err()
+
 		case <-ticker.C:
 			if _, err := f.Acquire(ctx); err != nil {
 				f.Clear()
 
 				select {
-				case f.failure <- struct{}{}:
+				case f.failure <- err:
 				default:
 				}
 
