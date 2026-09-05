@@ -319,7 +319,7 @@ func (r *Runner) startPortForward() error {
 	r.forwardCtx = ctx
 	r.forwardCancel = cancel
 
-	go r.forwarder.StartRenew(ctx)
+	r.forwarder.StartRenew(ctx)
 	return nil
 }
 
