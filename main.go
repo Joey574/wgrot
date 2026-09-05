@@ -67,9 +67,19 @@ func main() {
 		"publish the current forwarded port to the provided file",
 	)
 
+	trace := flag.Bool(
+		"trace",
+		false,
+		"enable trace logs",
+	)
+
 	flag.Parse()
 
 	sink.SetLogLevel(sink.DEBUG)
+	if *trace {
+		sink.SetLogLevel(sink.TRACE)
+	}
+
 	sink.PushSinks(os.Stdout)
 	sink.SetFormat("[\\t] *")
 
