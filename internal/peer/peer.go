@@ -60,6 +60,10 @@ func (p *Peer) Load(path string) error {
 
 	p.Path = path
 	p.Name = filepath.Base(p.Path)
+
+	// make the last connection yesterday, allowing immediate rotation
+	p.lastConnection = time.Now().Add(-(24 * time.Hour))
+
 	p.lockPath = path + ".lock"
 	p.lock = flock.New(p.lockPath)
 

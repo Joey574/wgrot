@@ -20,7 +20,7 @@ import (
 const (
 	rekeyWindow = int64(3 * 60) // 3 minutes
 
-	minTimeBetweenSamePeer = time.Hour
+	minTimeBetweenSamePeer = 2 * time.Hour
 	minTimeBetweenRotation = 15 * time.Minute
 	baseBackoff            = 5 * time.Second
 	maxBackoff             = 5 * time.Minute
@@ -158,7 +158,9 @@ func (r *Runner) rotate(ctx context.Context) {
 			// check connection time
 			if time.Since(next.LastConnection()) <= minTimeBetweenSamePeer {
 				next.Unlock()
-				if err := sleepWithContext(ctx, jittered(baseBackoff)); err != nil {
+				t := jittered(baseBackoff)
+				sink.Printf(sink.WARN, "rotated to '%s' too recently, sleeping for %s\n", next.Name, t.String())
+				if err := sleepWithContext(ctx, t); err != nil {
 					sink.Printf(sink.ERROR, "%v\n", err)
 					return
 				}

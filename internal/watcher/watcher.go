@@ -70,7 +70,7 @@ func handleCreate(event *fsnotify.Event, pool *pool.Pool) {
 }
 
 func handleRemove(event *fsnotify.Event, pool *pool.Pool) {
-	sink.Printf(sink.DEBUG, "removing config from pool: %s", event.Name)
+	sink.Printf(sink.DEBUG, "removing config from pool: %s\n", event.Name)
 	time.Sleep(time.Second) // give time for event to complete
 	go pool.Remove(event.Name)
 }
