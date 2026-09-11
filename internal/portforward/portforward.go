@@ -137,6 +137,12 @@ func (f *Forwarder) Acquire(ctx context.Context) (int, error) {
 	}
 
 	f.mu.Lock()
+
+	// port has been changed
+	if f.port != tcpPort {
+		sink.Printf(sink.INFO, "port forwarding active on port %d\n", tcpPort)
+	}
+
 	f.port = tcpPort
 	f.failed = false
 	f.mu.Unlock()

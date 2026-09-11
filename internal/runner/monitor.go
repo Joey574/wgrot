@@ -86,6 +86,6 @@ func (m *monitor) IsConnected(ctx context.Context) bool {
 		return true
 	}
 
-	sink.Println(sink.ERROR, "test connection exceeded tolerance")
+	sink.Println(sink.TRACE, "test connection exceeded tolerance")
 	return false
 }
