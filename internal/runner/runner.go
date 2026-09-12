@@ -143,8 +143,8 @@ func (r *Runner) rotate(ctx context.Context) {
 				failedCycles++
 				t := min(time.Hour, 5*time.Duration(failedCycles)*time.Minute)
 				sink.Printf(sink.ERROR, "failed through pool, sleeping for %s\n", t.String())
-				err := sleepWithContext(ctx, t)
-				if err != nil {
+				if err := sleepWithContext(ctx, t); err != nil {
+					sink.Printf(sink.ERROR, "%v\n", err)
 					return
 				}
 			}
@@ -171,6 +171,7 @@ func (r *Runner) rotate(ctx context.Context) {
 
 			if time.Since(r.lastConnection) <= minTimeBetweenRotation {
 				wait := time.Until(r.lastConnection.Add(time.Duration(minTimeBetweenRotation)))
+				sink.Printf(sink.WARN, "rotating too recently, sleeping for %s\n", wait.String())
 				if err := sleepWithContext(ctx, wait); err != nil {
 					sink.Printf(sink.ERROR, "%v\n", err)
 					next.Unlock()
