@@ -231,6 +231,7 @@ func (f *Forwarder) Renew(ctx context.Context) error {
 				}
 
 				// failed, short sleep
+				sink.Printf(sink.ERROR, "acquire: %v\n", err)
 				time.Sleep(5 * time.Second)
 			}
 
