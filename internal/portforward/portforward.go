@@ -157,8 +157,11 @@ func (f *Forwarder) Acquire(ctx context.Context) (int, error) {
 func (f *Forwarder) mapPort(ctx context.Context, protocol string) (int, error) {
 	sink.Println(sink.TRACE, "forwarder: map port")
 
+	ctx2, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
 	cmd := exec.CommandContext(
-		ctx,
+		ctx2,
 		"natpmpc",
 		"-a", "1", "0",
 		protocol,
@@ -220,18 +223,25 @@ func (f *Forwarder) Renew(ctx context.Context) error {
 			return ctx.Err()
 
 		case <-ticker.C:
-			if _, err := f.Acquire(ctx); err != nil {
-				f.Clear()
-
-				select {
-				case f.failure <- err:
-				default:
+			var err error
+			for range 5 {
+				if _, err = f.Acquire(ctx); err == nil {
+					ticker.Reset(RenewInterval)
+					return nil
 				}
 
-				return err
+				// failed, short sleep
+				time.Sleep(5 * time.Second)
 			}
 
-			ticker.Reset(RenewInterval)
+			f.Clear()
+
+			select {
+			case f.failure <- err:
+			default:
+			}
+
+			return err
 		}
 	}
 }
