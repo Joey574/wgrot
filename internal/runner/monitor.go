@@ -75,6 +75,7 @@ func (m *monitor) IsConnected(ctx context.Context) bool {
 		resp.Body.Close()
 
 		if status == http.StatusOK || status == http.StatusNoContent {
+			sink.Printf(sink.TRACE, "made succesful connection with %s (%s)\n", req.URL.String(), req.RemoteAddr)
 			m.failed = 0
 			return true
 		}
@@ -86,6 +87,5 @@ func (m *monitor) IsConnected(ctx context.Context) bool {
 		return true
 	}
 
-	sink.Println(sink.TRACE, "test connection exceeded tolerance")
 	return false
 }
