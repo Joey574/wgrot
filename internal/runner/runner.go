@@ -172,7 +172,7 @@ func (r *Runner) rotate(ctx context.Context) {
 
 			if time.Since(r.lastConnection) <= minTimeBetweenRotation {
 				wait := time.Until(r.lastConnection.Add(time.Duration(minTimeBetweenRotation)))
-				sink.Printf(sink.WARN, "rotating too recently, sleeping for %s\n", wait.String())
+				sink.Printf(sink.WARN, "rotated too recently, sleeping for %s\n", wait.String())
 				if err := sleepWithContext(ctx, wait); err != nil {
 					sink.Printf(sink.ERROR, "%v\n", err)
 					next.Unlock()
