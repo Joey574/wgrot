@@ -227,7 +227,7 @@ func (f *Forwarder) Renew(ctx context.Context) error {
 			for range 5 {
 				if _, err = f.Acquire(ctx); err == nil {
 					ticker.Reset(RenewInterval)
-					return nil
+					break
 				}
 
 				// failed, short sleep
