@@ -224,25 +224,31 @@ func (f *Forwarder) Renew(ctx context.Context) error {
 
 		case <-ticker.C:
 			var err error
-			for range 5 {
+			giveUp := time.Now().Add(MappingLifetime)
+
+			for {
 				if _, err = f.Acquire(ctx); err == nil {
-					ticker.Reset(RenewInterval)
 					break
 				}
 
-				// failed, short sleep
-				sink.Printf(sink.ERROR, "acquire: %v\n", err)
-				time.Sleep(5 * time.Second)
+				sink.Printf(sink.WARN, "acquire: %v\n", err)
+				if time.Now().After(giveUp) {
+					break
+				}
+
+				if sleepWithContext(ctx, 5*time.Second) != nil {
+					return ctx.Err()
+				}
 			}
 
-			f.Clear()
-
-			select {
-			case f.failure <- err:
-			default:
+			if err != nil {
+				f.Clear()
+				select {
+				case f.failure <- err:
+				default:
+				}
+				return err
 			}
-
-			return err
 		}
 	}
 }
@@ -253,4 +259,13 @@ func publishDir(path string) string {
 		return "."
 	}
 	return path[:i]
+}
+
+func sleepWithContext(ctx context.Context, t time.Duration) error {
+	select {
+	case <-ctx.Done():
+		return fmt.Errorf("interupt triggered")
+	case <-time.After(t):
+		return nil
+	}
 }
